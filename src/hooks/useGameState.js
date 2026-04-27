@@ -634,7 +634,7 @@ const useGameState = create(
         const safeNodeIds = new Set(safeNodes.map(v => v.id))
 
         // 1. Base Income
-        const base = 20 // Tăng từ 15 -> 20
+        const base = 30 // Tăng từ 20 -> 30
 
         // 2. Loop Yield (SCCs)
         // Chỉ tính SCC "An toàn" (tất cả node chưa bị lộ)
@@ -679,7 +679,7 @@ const useGameState = create(
         // Smurfs: $400 each (Giảm từ 500)
         safeNodes.forEach(v => {
           if (v.type === 'personal' && !nodesInStyles.has(v.id) && !nodesInSCCs.has(v.id)) {
-            launderedThisRound += 400
+            launderedThisRound += 600 // Tăng từ 400
           }
         })
         
@@ -687,7 +687,7 @@ const useGameState = create(
         syndicateCustomStyles.forEach(style => {
           if (style.type === 'layer') {
             const isSafe = style.nodes.every(id => safeNodeIds.has(id))
-            if (isSafe) launderedThisRound += 1500
+            if (isSafe) launderedThisRound += 2200 // Tăng từ 1500
           }
         })
         
@@ -695,7 +695,7 @@ const useGameState = create(
         sccResult.comps.forEach(comp => {
           if (comp.length > 1) {
             const isSafe = comp.every(id => safeNodeIds.has(id))
-            if (isSafe) launderedThisRound += 4000
+            if (isSafe) launderedThisRound += 5500 // Tăng từ 4000
           }
         })
 
@@ -1443,7 +1443,7 @@ const useGameState = create(
               newEdges = newEdges.filter(e => `${e.u}-${e.v}` !== key && `${e.u}-${e.v}` !== keyRev)
             })
             localRemovedCount += cycleEdges.length
-            localSuspicionGain = 20
+            localSuspicionGain = 15 // Giảm từ 20
             localBounty = cycleEdges.length * 5
             if (targets.cycleNodes?.[0]) {
               localFloatingTexts.push({ id: `ft-ring-${Date.now()}`, nodeId: targets.cycleNodes[0], text: `+$${localBounty}`, color: '#ef4444' })
@@ -1455,7 +1455,7 @@ const useGameState = create(
                 ? { ...e, isOriented: false, directed: false, isHighlighted: false, highlightSkill: null }
                 : e
             )
-            localSuspicionGain = 10
+            localSuspicionGain = 5 // Giảm từ 10
             localBounty = 0
           } else if (skillId === 'bridge' && type === 'edge') {
             if (targets.length === 0) return state
@@ -1590,7 +1590,7 @@ const useGameState = create(
 
         const newRemaining = invFreezeRemaining - 1
         const time = new Date().toLocaleTimeString('vi-VN')
-        const bountyPerNode = 10
+        const bountyPerNode = 5 // Giảm từ 10
 
         set(s => ({
           invFreezeRemaining: newRemaining,
@@ -1600,7 +1600,7 @@ const useGameState = create(
             ? s.investigationBudget - invFreezePendingCost + invFreezeMax * bountyPerNode
             : s.investigationBudget,
           investigatorAp: newRemaining === 0 ? s.investigatorAp - invFreezePendingAp : s.investigatorAp,
-          suspicionProgress: newRemaining === 0 ? Math.min(100, s.suspicionProgress + invFreezeMax * 15) : s.suspicionProgress,
+          suspicionProgress: newRemaining === 0 ? Math.min(100, s.suspicionProgress + invFreezeMax * 8) : s.suspicionProgress, // Giảm từ 15
           invSkillPhase: newRemaining === 0 ? { ...s.invSkillPhase, network: 'scan' } : s.invSkillPhase,
           invScanResult: newRemaining === 0 ? { ...s.invScanResult, network: null } : s.invScanResult,
           invFreezeTargets: newRemaining === 0 ? null : s.invFreezeTargets,
