@@ -528,6 +528,8 @@ const useGameState = create(
             invSkillPhase: {},
             invScanResult: {},
             invFloatingTexts: [],
+            algorithmSteps: [],
+            currentStepIndex: 0,
             sitrepData: {
               budget: newInvBudget,
               frozenCount,
@@ -540,8 +542,8 @@ const useGameState = create(
           addNews({
             type: 'investigator',
             title: '🕵️ Lượt Investigator',
-            summary: `Báo cáo tình hình lượt ${turn}`,
-            message: `SITREP => Ngân sách: {$${newInvBudget}} | Rủi ro: {${escapeRisk}%}`
+            summary: 'Hệ thống đã sẵn sàng điều tra',
+            message: 'SITREP => Dữ liệu hiện trường đã cập nhật => Sẵn sàng quét.'
           })
         } else {
           // Quay lại lượt Syndicate - Tính toán kinh tế

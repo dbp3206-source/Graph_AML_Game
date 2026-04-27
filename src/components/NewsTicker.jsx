@@ -13,9 +13,11 @@ const TYPE_LABELS = {
 function formatNodeText(text, vertices) {
   if (!text) return ''
   let formatted = text
+  // Replace IDs inside brackets first to avoid partial matching issues
   vertices.forEach((vertex) => {
     const label = `${TYPE_LABELS[vertex.type] || 'Đối tượng'} ${vertex.displayName || vertex.label || vertex.id}`
-    formatted = formatted.replaceAll(vertex.id, label)
+    // Replace {id} with {label}
+    formatted = formatted.split(`{${vertex.id}}`).join(`{${label}}`)
   })
   return formatted
 }
@@ -79,7 +81,7 @@ const NewsTicker = () => {
                   </p>
                 </div>
               </div>
-              <p className="time-badge flex-shrink-0 font-mono text-[10px] text-white/35 tabular-nums">
+              <p className={`time-badge flex-shrink-0 font-mono text-[10px] tabular-nums px-2 py-0.5 rounded transition-all ${index === 0 ? 'text-yellow-400 border border-yellow-400/50 bg-yellow-400/10' : 'text-white'}`}>
                 {item.time || '--:--:--'}
               </p>
             </div>
