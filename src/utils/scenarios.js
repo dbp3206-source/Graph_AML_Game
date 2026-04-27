@@ -74,7 +74,7 @@ export const SYNDICATE_SKILLS = [
     icon: 'Banknote',
     cost: 1,
     costType: 'ap',
-    description: 'Tách giao dịch (DFS Node Branching). Tạo node cá nhân và rải tiền.',
+    description: 'Phân tách tiền bẩn => {Tài khoản cá nhân}.',
     action: 'smurf'
   },
   {
@@ -83,7 +83,7 @@ export const SYNDICATE_SKILLS = [
     icon: 'Building2',
     cost: 1,
     costType: 'ap',
-    description: 'Thêm node công ty ma (DFS Path). Xây dựng chuỗi kết nối dài.',
+    description: 'Thiết lập chuỗi ẩn danh => {Công ty ma}.',
     action: 'layer'
   },
   {
@@ -92,7 +92,7 @@ export const SYNDICATE_SKILLS = [
     icon: 'Shuffle',
     cost: 2,
     costType: 'ap',
-    description: 'Kích hoạt dòng tiền (Robbins Theorem). Biến nết đứt thành mũi tên.',
+    description: 'Kích hoạt luồng tiền => {Định hướng}.',
     action: 'orient'
   },
   {
@@ -101,7 +101,7 @@ export const SYNDICATE_SKILLS = [
     icon: 'RotateCcw',
     cost: 2,
     costType: 'ap',
-    description: 'Tạo chu trình khép kín giữa 2 node để đánh lạc hướng điều tra.',
+    description: 'Khép kín dòng tiền => {Chu trình}.',
     action: 'loop'
   }
 ]
@@ -113,7 +113,7 @@ export const INVESTIGATOR_SKILLS = [
     icon: 'Zap',
     cost: 20,
     costType: 'budget',
-    description: 'Tìm điểm yếu duy nhất (DFS Low-link). Nếu cạnh cầu bị cắt, mạng lưới Syndicate sẽ sụp đổ.',
+    description: 'Truy tìm điểm yếu => {Cầu nối}.',
     action: 'bridge'
   },
   {
@@ -122,7 +122,7 @@ export const INVESTIGATOR_SKILLS = [
     icon: 'Wind',
     cost: 15,
     costType: 'budget',
-    description: 'Làm nhiễu loạn luồng tiền (Inverting Directions). Biến cạnh về dạng vô hướng (nét đứt).',
+    description: 'Vô hiệu hóa luồng tiền => {Nhiễu loạn}.',
     action: 'disorient'
   },
   {
@@ -131,7 +131,7 @@ export const INVESTIGATOR_SKILLS = [
     icon: 'Radio',
     cost: 45,
     costType: 'budget',
-    description: 'Dò tìm vòng xoáy tiền (Tarjan SCC). Tốc độ cao, hiệu quả ổn định.',
+    description: 'Quét vòng lặp tài chính => {Tarjan}.',
     action: 'tarjan'
   },
   {
@@ -140,7 +140,7 @@ export const INVESTIGATOR_SKILLS = [
     icon: 'Cpu',
     cost: 70,
     costType: 'budget',
-    description: 'Siêu máy tính quét SCC (Kosaraju). Đạt hiệu quả tối đa với đồ thị chuyển vị.',
+    description: 'Siêu máy tính quét vòng lặp => {Kosaraju}.',
     action: 'kosaraju'
   }
 ]

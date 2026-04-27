@@ -1,8 +1,56 @@
 import React, { useEffect } from 'react'
-import { Shield, Zap, Target, Search, Network, FileText, User, Cpu, ChevronRight, Activity, Coins, Building2, MoveRight, RotateCcw, DollarSign, CheckCircle2, TrendingUp } from 'lucide-react'
+import { Shield, Zap, Target, Search, Network, FileText, User, Cpu, ChevronRight, Activity, Coins, Building2, MoveRight, RotateCcw, DollarSign, CheckCircle2, TrendingUp, Skull } from 'lucide-react'
 import useGameState from '../hooks/useGameState'
 
-const NPCDialogue = () => {
+const SKILL_INFO = {
+  smurf: {
+    title: 'RẢI TIỀN',
+    accent: '#22c55e',
+    bullets: [
+      'Tách dòng tiền lớn thành nhiều nhánh nhỏ để phân tán dấu vết.',
+      'Mở rộng mạng lưới node cá nhân để tạo lớp ngụy trang giao dịch.',
+      'Phù hợp khi cần đẩy nhanh lưu lượng trước khi bị phân tán.'
+    ]
+  },
+  layer: {
+    title: 'TẠO LỚP',
+    accent: '#f59e0b',
+    bullets: [
+      'Bổ sung công ty ma để kéo dài đường đi của dòng tiền.',
+      'Tăng độ phức tạp điều tra bằng các lớp trung gian.',
+      'Hiệu quả nhất khi cần giãn cách nguồn tiền và đích đến.'
+    ]
+  },
+  orient: {
+    title: 'ĐỊNH HƯỚNG',
+    accent: '#0ea5e9',
+    bullets: [
+      'Đặt hướng cho dòng tiền để đẩy nhanh về mục tiêu.',
+      'Làm rõ đường dây ưu tiên trong mạng lưới hiện tại.',
+      'Nên kết hợp sau khi đã rải tiền hoặc tạo lớp.'
+    ]
+  },
+  loop: {
+    title: 'TẠO VÒNG',
+    accent: '#ff007f',
+    bullets: [
+      'Tạo chu trình giao dịch khép kín để đánh lạc hướng điều tra.',
+      'Gia tăng độ nhiễu của mạng lưới và tạo lớp che phủ bổ sung.',
+      'Phát huy tác dụng khi cần phân tán sự chú ý khỏi trục chính.'
+    ]
+  },
+  death_defiance: {
+    title: 'TỪ CHỐI TỬ THẦN',
+    accent: '#a855f7',
+    bullets: [
+      'Khôi phục lại node đã bị khóa đủ điều kiện lượt.',
+      'Mở lại một mắt xích quan trọng để tiếp tục luân chuyển.',
+      'Chỉ có giá trị khi mạng lưới đã bị tổn thất thực sự.'
+    ]
+  }
+}
+
+const NPCDialogue = ({ onSkillFocus }) => {
   const { 
     faction, 
     scenario, 
@@ -20,9 +68,12 @@ const NPCDialogue = () => {
     lastWashedAmount,
     showWashNotification,
     setShowWashNotification,
-    loopPickingMode
+    loopPickingMode,
+    deathDefianceSelectionMode,
+    graphData
   } = useGameState()
   const isSyndicate = faction === 'syndicate'
+  const eligibleReviveCount = (graphData?.vertices || []).filter(v => v.isFrozen && (v.lockedTurnCount || 0) >= 2).length
   
   useEffect(() => {
     if (showWashNotification) {
@@ -41,21 +92,51 @@ const NPCDialogue = () => {
   }, [showWashNotification, setShowWashNotification])
 
   const skills = isSyndicate ? [
-    { id: 'smurf', name: 'Rải tiền (Smurfing)', cost: 1, color: '#ff4d4d', icon: Coins, description: 'Tách giao dịch. Tạo node cá nhân và rải tiền.' },
-    { id: 'layer', name: 'Tạo lớp (Layering)', cost: 1, color: '#ff4d4d', icon: Building2, description: 'Thêm node công ty ma. Xây dựng chuỗi kết nối dài.' },
-    { id: 'orient', name: 'Định hướng (Orientation)', cost: 2, color: '#ff4d4d', icon: MoveRight, description: 'Kích hoạt dòng tiền hướng về mục tiêu.' },
-    { id: 'loop', name: 'Tạo vòng (Looping)', cost: 2, color: '#ff4d4d', icon: RotateCcw, description: 'Tạo chu trình khép kín để đánh lạc hướng.' },
+    { id: 'smurf', name: 'Chia nhỏ (Smurfing)', cost: 1, color: '#ff4d4d', icon: Coins, description: 'Phân tách tiền bẩn => {Tài khoản cá nhân}.' },
+    { id: 'layer', name: 'Tạo lớp (Layering)', cost: 1, color: '#ff4d4d', icon: Building2, description: 'Thiết lập chuỗi ẩn danh => {Công ty ma}.' },
+    { id: 'orient', name: 'Định hướng (Orientation)', cost: 2, color: '#ff4d4d', icon: MoveRight, description: 'Kích hoạt luồng tiền => {Định hướng}.' },
+    { id: 'loop', name: 'Tạo vòng (Looping)', cost: 2, color: '#ff4d4d', icon: RotateCcw, description: 'Khép kín dòng tiền => {Chu trình}.' },
   ] : [
-    { id: 'bridge', name: 'Bridge Hunter', cost: 20, color: '#00ffff', label: '[DO CẦU]', description: 'Tìm điểm yếu duy nhất nối các mạng lưới.' },
-    { id: 'disorient', name: 'Giải định chiều', cost: 15, color: '#00ffff', label: '[GIẢI ĐỊNH CHIỀU]', description: 'Làm nhiễu loạn luồng tiền về dạng vô hướng.' },
-    { id: 'tarjan', name: 'Tarjan', cost: 45, color: '#00ffff', label: '[SCC SCANNER]', description: 'Phát hiện các vòng xoáy tài chính khép kín.' },
-    { id: 'kosaraju', name: 'Kosaraju', cost: 70, color: '#00ffff', label: '[SCC PRO]', description: 'Quét sâu đồ thị chuyển vị để lột trần mạng lưới.' },
+    { id: 'bridge', name: 'Dò Cầu (Bridge Hunter)', cost: 20, color: '#00ffff', label: '[DÒ CẦU]', description: 'Truy tìm điểm yếu => {Cầu nối}.' },
+    { id: 'disorient', name: 'Giải định chiều', cost: 15, color: '#00ffff', label: '[GIẢI ĐỊNH CHIỀU]', description: 'Vô hiệu hóa luồng tiền => {Nhiễu loạn}.' },
+    { id: 'tarjan', name: 'Quét vòng lặp (Tarjan)', cost: 45, color: '#00ffff', label: '[QUÉT SCC]', description: 'Quét vòng lặp tài chính => {Tarjan}.' },
+    { id: 'kosaraju', name: 'Siêu máy tính (Kosaraju)', cost: 70, color: '#00ffff', label: '[SIÊU MÁY TÍNH]', description: 'Siêu máy tính quét vòng lặp => {Kosaraju}.' },
   ]
+
+  const displaySkills = isSyndicate
+    ? [
+        { ...skills[0], budgetCost: 30 },
+        { ...skills[1], budgetCost: 45 },
+        skills[2],
+        { ...skills[3], budgetCost: 60 },
+        {
+          id: 'death_defiance',
+          name: 'Từ chối Tử Thần',
+          cost: 2,
+          budgetCost: eligibleReviveCount > 0 ? 35 : 0,
+          color: '#d946ef',
+          icon: Skull,
+          description: 'Hồi sinh đỉnh bị khóa đủ 2 lượt.',
+          requiresEligible: true
+        }
+      ]
+    : skills
+
+  const focusSkill = (skill) => {
+    const info = SKILL_INFO[skill.id]
+    if (!info || !onSkillFocus) return
+    onSkillFocus({
+      id: skill.id,
+      title: info.title,
+      accent: info.accent,
+      bullets: info.bullets
+    })
+  }
 
   const syndicateContent = (
     <div className="flex flex-col h-full text-white/90">
       {/* MISSION DETAILS - COMPACT VERSION */}
-      <div className="panel-hacker p-4 mb-4 rounded-xl">
+      <div className="panel-hacker tactical-card p-4 mb-4 rounded-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-syn-pink" />
@@ -69,22 +150,22 @@ const NPCDialogue = () => {
       </div>
 
       {/* CASE PROGRESS */}
-      <div className="panel-hacker p-5 mb-4 rounded-xl">
+      <div className="panel-hacker tactical-card p-5 mb-4 rounded-xl">
         <h3 className="text-sm font-black text-white mb-4 uppercase">Chỉ số mạng lưới</h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-syn-pink/5 border border-syn-pink/10 p-2 rounded">
             <p className="text-[9px] text-syn-pink uppercase font-bold">Năng lượng (AP)</p>
-            <p className="text-lg font-black">{ap || 0}/6</p>
+            <p className="resource-number text-xl font-black">{ap || 0}/6</p>
           </div>
           <div className="bg-syn-pink/5 border border-syn-pink/10 p-2 rounded">
-            <p className="text-[9px] text-syn-pink uppercase font-bold">Vốn (Funds)</p>
-            <p className="text-lg font-black text-white">${(budget || 0).toLocaleString()}</p>
+            <p className="text-[9px] text-syn-pink uppercase font-bold">Vốn khả dụng</p>
+            <p className="resource-number text-xl font-black text-[#39ff14] drop-shadow-[0_0_8px_rgba(57,255,20,0.5)]">${(budget || 0).toLocaleString()}</p>
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-syn-pink/10">
           <div className="flex justify-between items-center mb-1">
             <p className="text-[8px] text-syn-pink/60 uppercase font-black">Số tiền đã rửa</p>
-            <p className="text-sm font-black text-[#39ff14]">{Math.floor(((moneyLaundered || 0) / (targetMoney || 1)) * 100)}%</p>
+            <p className="resource-number text-sm font-black text-[#39ff14]">{Math.floor(((moneyLaundered || 0) / (targetMoney || 1)) * 100)}%</p>
           </div>
           <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
             <div 
@@ -97,29 +178,42 @@ const NPCDialogue = () => {
       </div>
 
       {/* SYNDICATE SKILLS - PREMIUM TALL VERSION */}
-      <div className="flex-1 panel-hacker-premium p-5 rounded-xl flex flex-col min-h-0">
+      <div className="flex-1 panel-hacker-premium tactical-card p-5 rounded-xl flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-black text-white uppercase tracking-tighter">Kỹ năng mạng lưới</h3>
           <Zap className="w-4 h-4 text-syn-pink animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-          {skills.map(s => (
+          {displaySkills.map(s => (
             <button
               key={s.id}
-              onClick={() => executeSkill(s)}
-              disabled={gameStatus !== 'playing' || isAnimating || ap < s.cost || loopPickingMode}
-              className={`group w-full flex items-center justify-between p-3.5 rounded-xl border border-syn-pink/20 bg-syn-pink/5 hover:border-syn-pink/60 hover:bg-syn-pink/10 transition-all text-left ${(ap < s.cost || gameStatus !== 'playing' || isAnimating || loopPickingMode) ? 'opacity-40 cursor-not-allowed border-white/5 bg-white/5' : ''}`}
+              onClick={() => {
+                focusSkill(s)
+                executeSkill(s)
+              }}
+              disabled={gameStatus !== 'playing' || isAnimating || ap < s.cost || budget < (s.budgetCost || 0) || loopPickingMode || deathDefianceSelectionMode || (s.requiresEligible && eligibleReviveCount === 0)}
+              className={`skill-button group w-full flex items-center justify-between p-3.5 rounded-xl border border-syn-pink/20 bg-syn-pink/5 hover:border-syn-pink/60 hover:bg-syn-pink/10 transition-all text-left ${(ap < s.cost || budget < (s.budgetCost || 0) || gameStatus !== 'playing' || isAnimating || loopPickingMode || deathDefianceSelectionMode || (s.requiresEligible && eligibleReviveCount === 0)) ? 'opacity-40 cursor-not-allowed border-white/5 bg-white/5' : ''}`}
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-syn-pink/10 rounded-lg group-hover:scale-110 transition-transform">
                   {s.icon && <s.icon className="w-4 h-4 text-syn-pink" />}
                 </div>
                 <div>
-                  <p className="text-xs font-black text-white uppercase tracking-tight leading-none">{s.name}</p>
-                  <p className="text-[8px] text-white/40 mt-1 uppercase font-bold">Thao tác Syndicate</p>
+                  <p className="text-sm font-black text-white uppercase tracking-tight leading-none">{s.name}</p>
                 </div>
               </div>
-              <p className="text-syn-pink font-black text-xs">-{s.cost} AP</p>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                <div className="px-2 py-0.5 rounded bg-syn-pink/20 border border-syn-pink/40">
+                  <p className="text-syn-pink font-black text-[11px] whitespace-nowrap">-{s.cost} AP</p>
+                </div>
+                {(s.budgetCost || 0) > 0 && (
+                  <div className="px-2 py-0.5 rounded bg-[#39ff14]/10 border border-[#39ff14]/30">
+                    <p className="text-[#39ff14] font-black text-[11px] whitespace-nowrap drop-shadow-[0_0_8px_rgba(57,255,20,0.5)]">
+                      -${s.budgetCost}
+                    </p>
+                  </div>
+                )}
+              </div>
             </button>
           ))}
         </div>
@@ -146,7 +240,7 @@ const NPCDialogue = () => {
           <p className="text-sm font-black text-white uppercase italic tracking-tight">Vụ án Công ty ma</p>
           <div className="mt-3 bg-inv-cyan/10 border border-inv-cyan/20 p-2 rounded">
             <p className="text-[8px] text-inv-cyan uppercase font-bold">Investigation Budget</p>
-            <p className="text-sm font-black text-white">${budget.toLocaleString()}</p>
+            <p className="resource-number text-sm font-black text-[#39ff14]">${budget.toLocaleString()}</p>
           </div>
           <div className="mt-3">
              <p className="text-[9px] text-inv-cyan/60 uppercase font-black">Suspicion Level (Độ rủi ro)</p>
@@ -190,7 +284,7 @@ const NPCDialogue = () => {
               key={s.id}
               onClick={() => executeSkill(s)}
               disabled={gameStatus !== 'playing' || isAnimating || budget < s.cost}
-              className={`group w-full flex items-center justify-between p-4 rounded-xl border border-inv-cyan/20 bg-inv-cyan/5 hover:border-inv-cyan/60 hover:bg-inv-cyan/10 transition-all text-left ${(budget < s.cost || gameStatus !== 'playing' || isAnimating) ? 'disabled-skill' : ''}`}
+              className={`skill-button group w-full flex items-center justify-between p-4 rounded-xl border border-inv-cyan/20 bg-inv-cyan/5 hover:border-inv-cyan/60 hover:bg-inv-cyan/10 transition-all text-left ${(budget < s.cost || gameStatus !== 'playing' || isAnimating) ? 'disabled-skill' : ''}`}
             >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-inv-cyan/10 rounded-lg group-hover:scale-110 transition-transform">
@@ -204,7 +298,7 @@ const NPCDialogue = () => {
                   <p className="text-xs font-bold text-white uppercase">{s.name}</p>
                 </div>
               </div>
-              <p className="text-inv-cyan font-black text-sm">${s.cost}</p>
+              <p className="resource-number text-inv-cyan font-black text-sm">${s.cost}</p>
             </button>
           ))}
         </div>

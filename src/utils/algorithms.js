@@ -340,6 +340,85 @@ const ALGORITHMS = {
     }
 
     return { steps, comps }
+  },
+
+  // Find cycles (rings) in undirected graph via DFS back-edge detection
+  // Returns { cycleNodes: Set<id>, cycleEdges: [{u,v}], steps: [] }
+  findCycles: function(vertices, edges) {
+    const adj = {} // undirected adjacency with parent tracking
+
+    vertices.forEach(v => { adj[v.id] = [] })
+    edges.forEach(e => {
+      if (!adj[e.u]) adj[e.u] = []
+      if (!adj[e.v]) adj[e.v] = []
+      adj[e.u].push(e.v)
+      adj[e.v].push(e.u)
+    })
+
+    const visited = new Set()
+    const parent = {}
+    const cycleNodes = new Set()
+    const cycleEdges = []
+    const steps = []
+
+    const pushStep = (u, msg) => {
+      const nodeStatus = {}
+      vertices.forEach(v => {
+        if (cycleNodes.has(v.id)) nodeStatus[v.id] = 'active'
+        else if (visited.has(v.id)) nodeStatus[v.id] = 'visited'
+        else nodeStatus[v.id] = 'unvisited'
+      })
+      steps.push({ msg, nodeStatus, type: 'ring' })
+    }
+
+    const dfs = (u, par) => {
+      visited.add(u)
+      pushStep(u, `🔴 Duyệt nút ${u} — tìm kiếm vòng lặp rửa tiền`)
+      for (const v of (adj[u] || [])) {
+        if (v === par) continue
+        if (visited.has(v)) {
+          // Back edge found — trace the cycle
+          pushStep(u, `⚡ PHÁT HIỆN VÒNG: ${u} → ${v} là cạnh ngược — chu trình khép kín!`)
+          // Mark the cycle nodes/edges by tracing parent chain from u back to v
+          cycleNodes.add(u)
+          cycleNodes.add(v)
+          // Add the back edge
+          const backEdgeExists = cycleEdges.some(ce => 
+            (ce.u === u && ce.v === v) || (ce.u === v && ce.v === u)
+          )
+          if (!backEdgeExists) cycleEdges.push({ u, v })
+          // Trace path from u back to v via parents
+          let cur = u
+          while (cur !== v && parent[cur] != null) {
+            const p = parent[cur]
+            cycleNodes.add(p)
+            const pathEdgeExists = cycleEdges.some(ce => 
+              (ce.u === cur && ce.v === p) || (ce.u === p && ce.v === cur)
+            )
+            if (!pathEdgeExists) cycleEdges.push({ u: p, v: cur })
+            cur = p
+          }
+        } else {
+          parent[v] = u
+          dfs(v, u)
+        }
+      }
+    }
+
+    vertices.forEach(v => {
+      if (!visited.has(v.id)) dfs(v.id, null)
+    })
+
+    // Final summary step
+    if (cycleNodes.size > 0) {
+      pushStep(null, `🎯 HOÀN TẤT: Phát hiện ${cycleEdges.length} cạnh khép vòng trong mạng lưới!`)
+    }
+
+    return {
+      steps,
+      cycleNodes: Array.from(cycleNodes),
+      cycleEdges
+    }
   }
 
 }

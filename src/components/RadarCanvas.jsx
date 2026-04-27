@@ -14,6 +14,43 @@ const EMOJI_MAPS = {
   target: '🏦'
 }
 
+// Floating bounty text component
+function FloatingBountyText({ x, y, text, color, onDone }) {
+  const [opacity, setOpacity] = useState(1)
+  const [translateY, setTranslateY] = useState(0)
+
+  useEffect(() => {
+    const start = Date.now()
+    const duration = 1800
+    const tick = () => {
+      const elapsed = Date.now() - start
+      const progress = elapsed / duration
+      setOpacity(1 - progress)
+      setTranslateY(-progress * 60)
+      if (progress < 1) requestAnimationFrame(tick)
+      else onDone?.()
+    }
+    requestAnimationFrame(tick)
+  }, [])
+
+  return (
+    <div
+      className="absolute z-50 pointer-events-none font-black text-lg font-mono"
+      style={{
+        left: x,
+        top: y,
+        transform: `translate(-50%, calc(-50% + ${translateY}px))`,
+        opacity,
+        color,
+        textShadow: `0 0 15px ${color}, 0 0 30px ${color}`,
+        transition: 'none'
+      }}
+    >
+      {text}
+    </div>
+  )
+}
+
 function RadarCanvas() {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
@@ -58,7 +95,20 @@ function RadarCanvas() {
     loopPickingMode,
     loopOriginNodeId,
     loopDestNodeId,
-    loopHighlightedEdges
+    loopHighlightedEdges,
+    syndicateCustomStyles,
+    loopSelectedNodes,
+    loopFloatingTexts,
+    clearLoopFloatingText,
+    invFloatingTexts,
+    clearInvFloatingText,
+    redNoticeFogCleared,
+    invFreezeSelectionMode,
+    invFreezeRemaining,
+    invFreezeSelectNode,
+    setGraphData,
+    deathDefianceSelectionMode,
+    cancelDeathDefianceSelection
   } = useGameState()
 
   const [simMode, setSimMode] = useState('select') // 'select', 'add_node', 'add_edge', 'delete'
@@ -124,11 +174,11 @@ function RadarCanvas() {
             'width': 6,
             'line-color': isSyndicate ? '#ff4d4d' : '#39ff14',
             'target-arrow-color': isSyndicate ? '#ff4d4d' : '#39ff14',
-            'target-arrow-shape': 'triangle',
+            'target-arrow-shape': 'none',
             'arrow-scale': 1.6,
             'curve-style': 'bezier',
             'opacity': 0.5,
-            'line-style': (isSyndicate && isOriented) ? 'solid' : 'dashed', // Dashed by default for "tracing"
+            'line-style': 'dashed',
             'shadow-blur': 15,
             'shadow-color': isSyndicate ? '#ff4d4d' : '#39ff14',
             'shadow-opacity': 1.0,
@@ -137,6 +187,20 @@ function RadarCanvas() {
             'ghost-opacity': 0.1,
             'transition-property': 'width, shadow-blur, opacity',
             'transition-duration': '0.4s'
+          }
+        },
+        {
+          selector: 'edge.oriented',
+          style: {
+            'line-style': 'solid',
+            'target-arrow-shape': 'triangle'
+          }
+        },
+        {
+          selector: 'edge.fog-of-war',
+          style: {
+            'line-style': 'dashed',
+            'target-arrow-shape': 'none'
           }
         },
         {
@@ -197,23 +261,244 @@ function RadarCanvas() {
         {
           selector: 'edge.loop-path',
           style: {
-            'line-color': '#f0f',
-            'target-arrow-color': '#f0f',
-            'width': 10,
+            'line-color': '#f472b6',
+            'target-arrow-color': '#f472b6',
+            'width': 8,
             'shadow-blur': 25,
-            'shadow-color': '#f0f',
+            'shadow-color': '#f472b6',
             'line-style': 'solid',
+            'curve-style': 'bezier',
             'opacity': 1,
             'z-index': 998
+          }
+        },
+        {
+          selector: 'node.custom-colored',
+          style: {
+            'background-color': 'data(customColor)',
+            'border-color': '#fde68a',
+            'border-width': 8,
+            'shadow-blur': 70,
+            'shadow-color': 'data(customColor)',
+            'shadow-opacity': 1,
+            'z-index': 1001
+          }
+        },
+        {
+          selector: 'edge.custom-colored',
+          style: {
+            'line-color': 'data(customColor)',
+            'target-arrow-color': 'data(customColor)',
+            'shadow-color': 'data(customColor)',
+            'transition-property': 'background-color, border-color, shadow-blur, line-color',
+            'transition-duration': '0.5s'
+          }
+        },
+        {
+          selector: 'edge.loop-edge-solid',
+          style: {
+            'line-style': 'solid',
+            'curve-style': 'bezier',
+            'control-point-step-size': 100,
+            'width': 7,
+            'opacity': 1,
+            'line-color': '#f59e0b',
+            'target-arrow-color': '#f59e0b',
+            'shadow-blur': 38,
+            'shadow-color': '#f59e0b',
+            'shadow-opacity': 1,
+            'z-index': 2000,
+            'ghost': 'no',
+            'line-cap': 'round',
+            'line-join': 'round',
+            'transition-property': 'width, shadow-blur, opacity',
+            'transition-duration': '0.4s'
+          }
+        },
+        {
+          selector: 'edge.loop-blink-off',
+          style: {
+            'opacity': 0.38,
+            'shadow-blur': 12,
+            'width': 4
+          }
+        },
+        {
+          selector: '.chain-link',
+          style: {
+            'line-style': 'dashed',
+            'line-dash-pattern': [15, 8],
+            'width': 8,
+            'opacity': 0.9
+          }
+        },
+        {
+          selector: '.sharp-arrow',
+          style: {
+            'target-arrow-shape': 'triangle',
+            'target-arrow-fill': 'filled',
+            'arrow-scale': 1.8,
+            'width': 5,
+            'shadow-blur': 15,
+            'shadow-color': '#000',
+            'shadow-offset-y': 3,
+            'opacity': 1
+          }
+        },
+        {
+          selector: '.loop-pending',
+          style: {
+            'background-color': '#3b82f6',
+            'border-color': '#fff',
+            'border-width': 10,
+            'shadow-blur': 70,
+            'shadow-color': '#3b82f6',
+            'width': 95,
+            'height': 95,
+            'z-index': 9999
+          }
+        },
+        {
+          selector: 'node.revealed',
+          style: {
+            'border-width': 6,
+            'border-color': '#ff0000',
+            'shadow-blur': 40,
+            'shadow-color': '#ff0000',
+            'shadow-opacity': 0.8,
+            'overlay-color': '#ff0000',
+            'overlay-opacity': 0.2
+          }
+        },
+        {
+          selector: 'node.syn-frozen',
+          style: {
+            'background-color': '#171717',
+            'border-color': '#737373',
+            'border-width': 6,
+            'border-style': 'dashed',
+            'shadow-blur': 14,
+            'shadow-color': '#a3a3a3',
+            'shadow-opacity': 0.45,
+            'opacity': 0.55,
+            'z-index': 100,
+            'overlay-color': '#000',
+            'overlay-opacity': 0.35
+          }
+        },
+        {
+          selector: 'node.inv-frozen',
+          style: {
+            'background-color': '#111111',
+            'border-color': '#737373',
+            'border-width': 6,
+            'border-style': 'dashed',
+            'shadow-blur': 12,
+            'shadow-color': '#a3a3a3',
+            'shadow-opacity': 0.45,
+            'opacity': 0.55,
+            'z-index': 100,
+            'overlay-color': '#000',
+            'overlay-opacity': 0.4
+          }
+        },
+        {
+          selector: 'edge.inv-edge-highlight-red',
+          style: {
+            'line-color': '#ef4444',
+            'target-arrow-color': '#ef4444',
+            'width': 6,
+            'line-style': 'dashed',
+            'line-dash-pattern': [8, 4],
+            'shadow-blur': 25,
+            'shadow-color': '#ef4444',
+            'opacity': 1,
+            'z-index': 999
+          }
+        },
+        {
+          selector: 'edge.inv-edge-highlight-purple',
+          style: {
+            'line-color': '#a855f7',
+            'target-arrow-color': '#a855f7',
+            'width': 6,
+            'line-style': 'dashed',
+            'line-dash-pattern': [8, 4],
+            'shadow-blur': 25,
+            'shadow-color': '#a855f7',
+            'opacity': 1,
+            'z-index': 999
+          }
+        },
+        {
+          // Frozen chain edges — looks like a locked chain (dashed gray)
+          selector: 'edge.frozen-chain',
+          style: {
+            'line-color': '#6b7280',
+            'target-arrow-color': '#6b7280',
+            'width': 5,
+            'line-style': 'dashed',
+            'line-dash-pattern': [3, 8],
+            'shadow-blur': 4,
+            'shadow-color': '#9ca3af',
+            'shadow-opacity': 0.35,
+            'opacity': 0.5,
+            'z-index': 50
+          }
+        },
+        {
+          // Ring-detected nodes — red blinking in Investigator view
+          selector: 'node.inv-ring-highlight',
+          style: {
+            'border-color': '#ef4444',
+            'border-width': 8,
+            'shadow-blur': 40,
+            'shadow-color': '#ef4444',
+            'shadow-opacity': 1,
+            'z-index': 1000
+          }
+        },
+        {
+          selector: 'node.ring-blink-off',
+          style: {
+            'opacity': 0.45,
+            'shadow-blur': 12
+          }
+        },
+        {
+          selector: 'edge.ring-blink-off',
+          style: {
+            'opacity': 0.28,
+            'shadow-blur': 10,
+            'width': 3
+          }
+        },
+        {
+          // Freeze-selectable nodes — purple pulsing, clickable
+          selector: 'node.freeze-selectable',
+          style: {
+            'border-color': '#a855f7',
+            'border-width': 8,
+            'shadow-blur': 50,
+            'shadow-color': '#a855f7',
+            'shadow-opacity': 1,
+            'z-index': 1000
           }
         }
       ]
     })
 
+
     cyRef.current = cy
 
     cy.on('tap', 'node', (evt) => {
       const nodeId = evt.target.id()
+      // If in freeze selection mode, route click to invFreezeSelectNode
+      const state = useGameState.getState()
+      if (state.invFreezeSelectionMode) {
+        state.invFreezeSelectNode(nodeId)
+        return
+      }
       setSelectedNode(nodeId)
     })
 
@@ -269,15 +554,56 @@ function RadarCanvas() {
     // Add/Update nodes
     graphData.vertices.forEach(v => {
       const existing = cy.getElementById(v.id)
-      const emoji = v.emoji || EMOJI_MAPS[v.type] || '⚪'
+      const baseEmoji = v.emoji || EMOJI_MAPS[v.type] || '⚪'
+      // Frozen node shows lock emoji IN BOTH VIEWS
+      const emoji = v.isFrozen ? `🪦🔒${baseEmoji}` : baseEmoji
       const tierColor = tiersColors[v.id] || (isSyndicate ? '#ff4d4d' : '#00ffff')
       
-      const isLoopOrigin = v.id === loopOriginNodeId
-      const isLoopDest = v.id === loopDestNodeId
+      // Investigator Fog of War: grey everything unless specially flagged
+      let bgColor = null
+      let borderColor = tierColor
+      
+      if (!isSyndicate && !redNoticeFogCleared) {
+        // FOG OF WAR: default grey
+        bgColor = '#1a1a1a'
+        borderColor = '#444444'
+        // Exceptions:
+        if (v.isFrozen) { bgColor = '#111111'; borderColor = '#737373' }
+        if (v.isHighlighted) {
+          if (v.highlightType === 'network') { bgColor = '#1a0030'; borderColor = '#a855f7' }
+          else if (v.highlightType === 'ring') { bgColor = '#1a0000'; borderColor = '#ef4444' }
+          else { bgColor = '#1a0000'; borderColor = '#ef4444' }
+        }
+      } else if (isSyndicate && v.isFrozen) {
+        // Syndicate view: frozen nodes appear dimmed/indigo to indicate freeze
+        bgColor = '#171717'
+        borderColor = '#737373'
+      }
+      
+      // Find the most relevant custom style (prioritize 'loop' over 'layer')
+      const nodeStyles = isSyndicate ? syndicateCustomStyles.filter(s => s.nodes.includes(v.id)) : []
+      const customStyle = nodeStyles.find(s => s.type === 'loop') || nodeStyles[nodeStyles.length - 1]
+      
+      const isLoop = customStyle?.type === 'loop'
+      const inCurrentSelection = isSyndicate && loopSelectedNodes.includes(v.id)
       
       let classes = isSyndicate ? 'node polaroid' : 'node glowing'
-      if (isLoopOrigin && !loopDestNodeId) classes += ' loop-origin'
-      if (isLoopDest || (isLoopOrigin && loopDestNodeId)) classes += ' loop-dest'
+
+      if (inCurrentSelection) classes += ' loop-pending'
+      if (customStyle && isLoop && isSyndicate) classes += ' custom-colored'
+      if (v.isRevealed && isSyndicate) classes += ' revealed'
+      if (!isSyndicate && v.isFrozen) classes += ' inv-frozen'
+      if (isSyndicate && v.isFrozen) classes += ' syn-frozen' // NEW: syndicate sees frozen too
+      if (!isSyndicate && v.isHighlighted) {
+        if (v.highlightType === 'network') classes += ' inv-highlight-purple'
+        else if (v.highlightType === 'ring') classes += ' inv-ring-highlight'
+        else classes += ' inv-highlight-red'
+      }
+      if (isSyndicate && v.isHighlighted && v.highlightType === 'death_defiance') classes += ' freeze-selectable'
+      
+      // Freeze selection mode: highlight selectable nodes differently
+      const { invFreezeSelectionMode: freezeMode } = useGameState.getState()
+      if (!isSyndicate && freezeMode && v.isHighlighted && !v.isFrozen) classes += ' freeze-selectable'
 
       if (existing.length === 0) {
         cy.add({
@@ -287,7 +613,9 @@ function RadarCanvas() {
             label: (v.displayName || v.label).toUpperCase(), 
             type: v.type, 
             emoji: emoji,
-            tierColor: tierColor
+            tierColor: (!isSyndicate && !redNoticeFogCleared) ? borderColor : tierColor,
+            customColor: customStyle?.color,
+            bgColor: bgColor
           },
           position: { x: v.x || 0, y: v.y || 0 },
           classes: classes
@@ -296,37 +624,72 @@ function RadarCanvas() {
         existing.classes(classes)
         existing.data('label', (v.displayName || v.label).toUpperCase())
         existing.data('emoji', emoji)
-        existing.data('tierColor', tierColor)
+        existing.data('tierColor', (!isSyndicate && !redNoticeFogCleared) ? borderColor : tierColor)
+        existing.data('customColor', customStyle?.color)
+        existing.data('bgColor', bgColor)
       }
     })
 
-    // Update Edges (Clear and rebuild is often smoother for small graphs than diffing)
+    // Update Edges
     cy.edges().remove()
     graphData.edges.forEach((e, i) => {
       const sourceNode = cy.getElementById(e.u)
       const targetNode = cy.getElementById(e.v)
       if (sourceNode.length > 0 && targetNode.length > 0) {
-        const isLoopEdge = loopHighlightedEdges.some(le => le.u === e.u && le.v === e.v)
+        // Find if this edge belongs to a custom style group (prioritize 'loop')
+        const edgeStyles = isSyndicate ? syndicateCustomStyles.filter(s => 
+          s.edges?.some(se => se.u === e.u && se.v === e.v)
+        ) : []
+        const customStyle = edgeStyles.find(s => s.type === 'loop') || edgeStyles[edgeStyles.length - 1]
+        
+        const isLayerEdge = customStyle?.type === 'layer'
+        const isLoopEdge = customStyle?.type === 'loop'
+        const sourceData = graphData.vertices.find(v => v.id === e.u)
+        const targetData = graphData.vertices.find(v => v.id === e.v)
+        const hasFrozenEndpoint = sourceData?.isFrozen || targetData?.isFrozen
+
+        let classes = ''
+        if (isLayerEdge && isSyndicate) {
+          classes = (e.isOriented || e.directed) ? 'sharp-arrow custom-colored' : 'chain-link custom-colored'
+        } else if (isLoopEdge && isSyndicate) {
+          classes = 'loop-edge-solid custom-colored'
+        } else if (customStyle && isSyndicate) {
+          classes = 'custom-colored'
+        }
+
+        // Investigator Fog of War edge styling
+        if (hasFrozenEndpoint) {
+          classes = 'frozen-chain'
+        } else if (!isSyndicate) {
+          if (e.isHighlighted) {
+            classes = e.highlightSkill === 'network' ? 'inv-edge-highlight-purple' : 'inv-edge-highlight-red'
+          } else {
+            classes = 'fog-of-war'
+          }
+        } else {
+          const isOrientedEdge = e.isOriented || e.directed
+          if (!isLoopEdge && !isLayerEdge && !customStyle) {
+            if (isOrientedEdge) classes += ' oriented'
+            else classes += ' fog-of-war'
+          }
+        }
+
         cy.add({
           group: 'edges',
-          data: { id: `edge${i}`, source: e.u, target: e.v },
-          classes: isLoopEdge ? 'loop-path' : ''
+          data: {
+            id: `edge${i}`,
+            source: e.u,
+            target: e.v,
+            customColor: isSyndicate
+              ? (customStyle?.color || '#ff4d4d')
+              : (e.isHighlighted ? (e.highlightSkill === 'network' ? '#a855f7' : '#ef4444') : '#39ff14')
+          },
+          classes: classes
         })
       }
     })
 
-    // Appearance (Fog of War)
-    const color = isSyndicate ? '#ff4d4d' : '#06b6d4'
-    const isInvestigator = faction === 'investigator'
-    
-    cy.edges().style({
-      'line-color': color,
-      'target-arrow-color': color,
-      'target-arrow-shape': (!isInvestigator && isOriented) ? 'triangle' : 'none',
-      'line-style': (!isInvestigator && isOriented) ? 'solid' : 'dashed'
-    })
-
-    // Run layout ONLY if nodes were added
+    // Layout management
     if (nextNodes.length !== currentNodes.length) {
       cy.layout({ 
         name: 'cose', 
@@ -346,7 +709,7 @@ function RadarCanvas() {
       cy.resize()
     }
 
-  }, [graphData, isSyndicate, isOriented, faction])
+  }, [graphData, isSyndicate, isOriented, faction, redNoticeFogCleared, loopSelectedNodes, syndicateCustomStyles])
 
 
   // --- Algorithm Animation ---
@@ -369,6 +732,37 @@ function RadarCanvas() {
       if (edge.length > 0) edge.addClass('highlighted')
     }
   }, [algorithmSteps, currentStepIndex])
+
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy || !isSyndicate) return
+
+    let dim = false
+    const tick = () => {
+      dim = !dim
+      cy.edges('.loop-edge-solid').toggleClass('loop-blink-off', dim)
+    }
+
+    tick()
+    const interval = setInterval(tick, 430)
+    return () => clearInterval(interval)
+  }, [isSyndicate, graphData, syndicateCustomStyles])
+
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy || isSyndicate) return
+
+    let dim = false
+    const tick = () => {
+      dim = !dim
+      cy.nodes('.inv-ring-highlight').toggleClass('ring-blink-off', dim)
+      cy.edges('.inv-edge-highlight-red').toggleClass('ring-blink-off', dim)
+    }
+
+    tick()
+    const interval = setInterval(tick, 380)
+    return () => clearInterval(interval)
+  }, [isSyndicate, graphData])
 
   // --- Auto-play ---
   useEffect(() => {
@@ -394,6 +788,16 @@ function RadarCanvas() {
 
   const scenarioName = graphData?.name || 'Chọn kịch bản'
 
+  // Floating texts: get positions from cytoscape nodes
+  const getNodeScreenPos = (nodeId) => {
+    const cy = cyRef.current
+    if (!cy) return null
+    const node = cy.getElementById(nodeId)
+    if (!node || node.length === 0) return null
+    const pos = node.renderedPosition()
+    return pos
+  }
+
   return (
     <div className="flex-1 relative flex flex-col bg-[#050505]">
       {/* Simulator Toolbar (TOP RIGHT as requested) */}
@@ -417,17 +821,123 @@ function RadarCanvas() {
         )}
         
         <div ref={containerRef} className="w-full h-full relative z-10" />
+
+        {/* Network Analyzer Blinking Overlay (Investigator only) */}
+        {!isSyndicate && graphData?.vertices.filter(v => v.isHighlighted && v.highlightType === 'network').map(v => {
+          const pos = getNodeScreenPos(v.id)
+          if (!pos) return null
+          return (
+            <div
+              key={`net-blink-${v.id}`}
+              className="absolute z-20 pointer-events-none rounded-full"
+              style={{
+                left: pos.x - 30,
+                top: pos.y - 30,
+                width: 60,
+                height: 60,
+                border: '4px solid #fcd34d',
+                boxShadow: '0 0 40px #fcd34d, inset 0 0 20px #fcd34d',
+                animation: 'inv-blink 0.6s ease-in-out infinite'
+              }}
+            />
+          )
+        })}
+
+        {/* Floating bounty texts (Investigator only) */}
+        {!isSyndicate && invFloatingTexts && invFloatingTexts.map(ft => {
+          const pos = getNodeScreenPos(ft.nodeId)
+          if (!pos) return null
+          return (
+            <FloatingBountyText
+              key={ft.id}
+              x={pos.x}
+              y={pos.y}
+              text={ft.text}
+              color={ft.color}
+              onDone={() => clearInvFloatingText(ft.id)}
+            />
+          )
+        })}
+
+        {isSyndicate && loopFloatingTexts && loopFloatingTexts.map(ft => {
+          const pos = getNodeScreenPos(ft.nodeId)
+          if (!pos) return null
+          return (
+            <FloatingBountyText
+              key={ft.id}
+              x={pos.x}
+              y={pos.y}
+              text={ft.text}
+              color={ft.color}
+              onDone={() => clearLoopFloatingText(ft.id)}
+            />
+          )
+        })}
+
         <div className="absolute top-3 left-3 glass-panel px-3 py-1.5 rounded-lg flex items-center gap-2 border-white/5 z-20">
           <Target className={`w-4 h-4 ${isSyndicate ? 'text-syn-pink' : 'text-inv-cyan'}`} />
           <span className="text-sm font-medium tracking-tight text-white/80">{scenarioName}</span>
         </div>
         
-        {selectedNode && (
+        {selectedNode && !invFreezeSelectionMode && !deathDefianceSelectionMode && (
           <div className="absolute top-3 right-3 glass-panel px-3 py-1.5 rounded-lg z-20">
             <p className="text-sm font-bold text-white">
               <span className="text-white/40 uppercase text-[10px] block">Target Selected</span>
               <span className="text-inv-cyan">{graphData.vertices.find(v => v.id === selectedNode)?.displayName || selectedNode}</span>
             </p>
+          </div>
+        )}
+
+        {/* Freeze Selection Mode Overlay */}
+        {!isSyndicate && invFreezeSelectionMode && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+            <div
+              className="px-5 py-3 rounded-2xl flex items-center gap-4"
+              style={{
+                background: 'rgba(10,0,30,0.9)',
+                border: '2px solid rgba(168,85,247,0.7)',
+                boxShadow: '0 0 30px rgba(168,85,247,0.4)',
+                backdropFilter: 'blur(12px)'
+              }}
+            >
+              <div className="text-center">
+                <p className="text-[9px] font-black text-purple-400/70 uppercase tracking-widest">Còn lại</p>
+                <p className="text-3xl font-black text-purple-400 font-mono" style={{ textShadow: '0 0 20px #a855f7' }}>
+                  {invFreezeRemaining}
+                </p>
+                <p className="text-[8px] text-white/40 font-mono">đối tượng</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-white uppercase">🔒 Click vào đỉnh nhấp nháy</p>
+                <p className="text-[9px] text-white/50 font-mono">để phong tỏa từng mục tiêu</p>
+                <button
+                  onClick={() => {
+                    const s = useGameState.getState()
+                    s.closeFreezeCountModal?.() || s.closeFreezePopup?.()
+                  }}
+                  className="mt-2 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider text-red-400/70 hover:text-red-400 transition-colors"
+                  style={{ border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)' }}
+                >
+                  ✕ HỦY CHỌN
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isSyndicate && deathDefianceSelectionMode && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+            <div className="border-2 border-fuchsia-400/70 bg-black/85 px-5 py-3 shadow-[0_0_28px_rgba(217,70,239,0.35)] backdrop-blur-xl">
+              <p className="font-mono text-sm font-black uppercase tracking-widest text-fuchsia-200">
+                Chọn đỉnh mộ đủ 2 lượt để hồi sinh
+              </p>
+              <button
+                onClick={cancelDeathDefianceSelection}
+                className="mt-2 border border-red-400/30 px-3 py-1 font-mono text-xs font-black uppercase text-red-300/80 hover:bg-red-500/10"
+              >
+                Hủy chọn
+              </button>
+            </div>
           </div>
         )}
 

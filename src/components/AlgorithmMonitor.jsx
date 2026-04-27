@@ -39,14 +39,14 @@ function AlgorithmMonitor() {
 
   if (algorithmSteps.length === 0) {
     return (
-      <div className={`h-full flex flex-col items-center justify-center p-4 text-center ${isSyndicate ? 'syndicate-theme text-[var(--neon-cyan)] opacity-20' : 'opacity-50'}`}>
-        <Cpu className="w-8 h-8 mb-2" />
-        <p className={`text-[10px] uppercase tracking-widest font-bold ${isSyndicate ? 'text-[var(--neon-cyan)]' : 'text-white/40'}`}>Monitor Off</p>
-        <p className="text-[9px] mt-1">{isSyndicate ? 'SYSTEM_READY' : 'Sử dụng kỹ năng để xem Trace'}</p>
+      <div className={`h-full flex flex-col items-center justify-center p-4 text-center ${isSyndicate ? 'syndicate-theme text-red-400 opacity-30' : 'opacity-50'}`}>
+        <Cpu className="mb-2 h-8 w-8" />
+        <p className={`text-[10px] font-black uppercase tracking-widest ${isSyndicate ? 'text-red-400' : 'text-white/40'}`}>Hệ thống đang chờ</p>
+        <p className="mt-1 text-[9px]">{isSyndicate ? 'Dữ liệu mã hóa' : 'Sử dụng kỹ năng để xem tiến trình'}</p>
         {isSyndicate && (
-          <div className="mt-4 pt-4 border-t border-white/10 w-full text-left font-mono">
-            <p className="text-[10px] text-[var(--neon-red)]">TRACE: OFFLINE</p>
-            <p className="text-[10px] text-[var(--neon-cyan)]">MONITOR: ACTIVE</p>
+          <div className="mt-4 w-full border-t border-white/10 pt-4 text-left font-mono">
+            <p className="text-[10px] text-red-500">KÊNH TRUYỀN: NGOẠI TUYẾN</p>
+            <p className="text-[10px] text-cyan-400">GIÁM SÁT: ĐANG CHỜ</p>
           </div>
         )}
       </div>
@@ -55,12 +55,12 @@ function AlgorithmMonitor() {
 
   return (
     <div className={`h-full flex flex-col ${isSyndicate ? 'syndicate-theme bg-transparent text-[var(--neon-cyan)] p-4 overflow-hidden font-mono' : 'flex-1 flex flex-col min-h-0 bg-black/20'}`}>
-      <div className={`flex items-center justify-between ${isSyndicate ? 'border-b border-[var(--neon-cyan)]/30 pb-2 mb-4' : 'px-4 py-2 bg-white/5 border-y border-white/10'}`}>
-        <h3 className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-2 ${isSyndicate ? 'text-[var(--neon-cyan)]' : (isSyndicate ? 'text-syn-pink' : 'text-inv-cyan')}`}>
-          <Monitor className="w-3 h-3" />
-          {isSyndicate ? 'Status' : 'Theo dõi thuật toán'}
+      <div className={`flex items-center justify-between ${isSyndicate ? 'border-b border-red-500/30 pb-2 mb-4' : 'px-4 py-2 bg-white/5 border-y border-white/10'}`}>
+        <h3 className={`text-[10px] font-black uppercase tracking-tighter flex items-center gap-2 ${isSyndicate ? 'text-red-300' : 'text-inv-cyan'}`}>
+          <Monitor className="h-3 w-3" />
+          {isSyndicate ? 'Bảng tin Telegram' : 'Theo dõi thuật toán'}
         </h3>
-        <span className="text-[10px] font-mono text-white/40">MONITOR_01</span>
+        <span className="font-mono text-[10px] text-white/20">LOG_v3.2</span>
       </div>
 
       <div className={`flex-1 overflow-y-auto space-y-4 custom-scrollbar ${isSyndicate ? '' : 'p-4'}`}>

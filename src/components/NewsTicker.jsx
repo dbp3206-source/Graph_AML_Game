@@ -1,66 +1,87 @@
-import React from 'react'
-import { Radio, AlertCircle, Info, MessageSquare } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { AlertTriangle, BadgeInfo, Radio, ShieldAlert, Terminal } from 'lucide-react'
 import useGameState from '../hooks/useGameState'
 
+const TYPE_LABELS = {
+  personal: 'Tài khoản cá nhân',
+  bank: 'Ngân hàng',
+  shell: 'Công ty ma',
+  source: 'Nguồn tiền',
+  mixer: 'Trạm trung chuyển'
+}
+
+function formatNodeText(text, vertices) {
+  if (!text) return ''
+  let formatted = text
+  vertices.forEach((vertex) => {
+    const label = `${TYPE_LABELS[vertex.type] || 'Đối tượng'} ${vertex.displayName || vertex.label || vertex.id}`
+    formatted = formatted.replaceAll(vertex.id, label)
+  })
+  return formatted
+}
+
 const NewsTicker = () => {
-  const { newsItems, faction } = useGameState()
+  const { newsItems, faction, graphData } = useGameState()
   const isSyndicate = faction === 'syndicate'
+  const vertices = graphData?.vertices || []
+
+  const news = useMemo(
+    () =>
+      newsItems.map((item) => ({
+        ...item,
+        safeTitle: formatNodeText(item.title, vertices),
+        safeMessage: formatNodeText(item.message, vertices),
+        safeSummary: formatNodeText(item.summary, vertices)
+      })),
+    [newsItems, vertices]
+  )
 
   return (
-    <div className="flex flex-col h-full text-white">
-      {/* Role-Specific Header */}
-      {isSyndicate ? (
-        <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Evidence Feed</h3>
-          <Radio className="w-4 h-4 text-syn-pink animate-pulse" />
+    <div className="news-ticker flex h-full flex-col text-white">
+      <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-3">
+          <div className={`border px-2 py-1 ${isSyndicate ? 'border-red-500/40 bg-red-500/10' : 'border-cyan-400/40 bg-cyan-400/10'}`}>
+            <Radio className={`h-4 w-4 ${isSyndicate ? 'text-red-200' : 'text-cyan-200'}`} />
+          </div>
+          <div>
+            <p className={`font-black uppercase tracking-[0.22em] text-lg ${isSyndicate ? 'text-red-200' : 'text-cyan-100'}`}>Bảng tin hiện trường</p>
+          </div>
         </div>
-      ) : (
-        <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
-           <div className="flex items-center gap-2">
-              <div className="p-1 bg-inv-cyan/20 rounded">
-                <MessageSquare className="w-3 h-3 text-inv-cyan" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-inv-cyan">Telegram</span>
-           </div>
-           <span className="text-[10px] text-white/30 font-mono">11:10:40</span>
-        </div>
-      )}
+      </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-        {newsItems.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full opacity-20 py-8">
-            <Radio className="w-8 h-8 mb-2" />
-            <p className="text-[10px] uppercase tracking-widest">No incoming feed</p>
+      <div className="log-list flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        {news.length === 0 && (
+          <div className="flex h-full flex-col items-center justify-center border border-dashed border-white/10 bg-white/5 px-4 py-8 text-center">
+            <BadgeInfo className="mb-3 h-8 w-8 text-white/30" />
+            <p className="font-black uppercase tracking-[0.2em] text-white/45">Đang chờ tín hiệu...</p>
           </div>
         )}
-        
-        {newsItems.map((item, i) => (
-          <div 
-            key={i} 
-            className={`p-3 rounded-lg border flex gap-3 animate-in slide-in-from-right-4 duration-300 ${
-              item.type === 'alert' 
-                ? 'bg-red-500/10 border-red-500/30' 
-                : 'bg-white/5 border-white/10'
-            }`}
-          >
-            <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-              item.type === 'alert' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-inv-cyan'
-            }`} />
-            <div className="flex-1 min-w-0">
-               <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className={`text-[10px] font-black uppercase tracking-tighter ${
-                    item.type === 'alert' ? 'text-red-400' : 'text-inv-cyan'
-                  }`}>
-                    {item.type === 'alert' ? 'LIVE: Critical Event' : 'LIVE: Feed Update'}
-                  </span>
-                  <span className="text-[9px] text-white/30 font-mono">{new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
-               </div>
-               <p className="text-xs font-bold text-white/90 leading-tight">
-                 {item.title}
-               </p>
-               <p className="text-[10px] text-white/50 mt-1 leading-relaxed">
-                 {item.message}
-               </p>
+
+        {news.map((item, index) => (
+          <div key={item.id || index} className={`log-entry border px-3 py-2 mb-2 ${index === 0 ? 'border-cyan-400/30 bg-cyan-400/5' : 'border-white/5 bg-white/5'}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-1 items-center gap-3 min-w-0">
+                <div className="flex-shrink-0">
+                  {item.type === 'alert' ? (
+                    <AlertTriangle className="h-4 w-4 text-red-400" />
+                  ) : item.type === 'syndicate' ? (
+                    <ShieldAlert className="h-4 w-4 text-red-300" />
+                  ) : (
+                    <Terminal className="h-4 w-4 text-cyan-300" />
+                  )}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <p className="log-title font-black uppercase tracking-[0.12em] text-white/90 text-sm truncate">
+                    {item.safeTitle || 'Thông báo hệ thống'}
+                  </p>
+                  <p className="log-content font-mono text-xs leading-relaxed text-white/70 truncate">
+                    {item.safeSummary || item.safeMessage}
+                  </p>
+                </div>
+              </div>
+              <p className="time-badge flex-shrink-0 font-mono text-[10px] text-white/35 tabular-nums">
+                {item.time || '--:--:--'}
+              </p>
             </div>
           </div>
         ))}

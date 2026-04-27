@@ -37,16 +37,16 @@ function HomePage() {
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-syn-bg overflow-y-auto">
-      <div className="absolute inset-0 matrix-bg" style={{ pointerEvents: 'none' }} />
+    <div className="home-screen fixed inset-0 z-50 flex items-start justify-center overflow-y-auto">
+      <div className="home-grid-bg absolute inset-0" style={{ pointerEvents: 'none' }} />
       
-      <div className="relative z-10 max-w-4xl w-full p-8">
+      <div className={`relative z-10 max-w-4xl w-full p-8 ${showLevelSelect ? 'campaign-page-wrapper' : ''}`}>
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-syn-crimson/20 border-4 border-syn-pink mb-6">
             <DollarSign className="w-12 h-12 text-syn-pink" />
           </div>
           
-          <h1 className="text-5xl font-bold text-white mb-4 neon-text-syn">
+          <h1 className="aml-logo text-5xl font-bold text-white mb-4 neon-text-syn">
             AML ASYMMETRY
           </h1>
           <p className="text-2xl text-white/70 mb-2">
@@ -99,7 +99,7 @@ function HomePage() {
 
             </>
           ) : showLevelSelect ? (
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
+            <div className="campaign-selection-shell level-select-panel bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
               <h2 className="text-2xl font-bold text-white mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Network className="text-syn-pink" />
@@ -159,7 +159,7 @@ function HomePage() {
                     <button
                       key={lvl.id}
                       onClick={() => handleLevelSelect(index)}
-                      className={`relative p-4 rounded-2xl border-2 text-left transition-all ${
+                      className={`level-card relative p-4 rounded-2xl border-2 text-left transition-all ${
                         isSelected 
                           ? 'bg-white/10 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.05)]' 
                           : isLocked 
