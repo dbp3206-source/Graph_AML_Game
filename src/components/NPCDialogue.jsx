@@ -47,6 +47,24 @@ const SKILL_INFO = {
       'Mở lại một mắt xích quan trọng để tiếp tục luân chuyển.',
       'Chỉ có giá trị khi mạng lưới đã bị tổn thất thực sự.'
     ]
+  },
+  high_speed_wash: {
+    title: 'RỬA SIÊU TỐC',
+    accent: '#ef4444',
+    bullets: [
+      'Thu hồi tiền bẩn ngay lập tức mà không cần đợi kết thúc lượt.',
+      'Gây áp lực cực lớn lên hệ thống Suspicion (+20%).',
+      'Toàn bộ mạng lưới giao dịch hiện tại sẽ bị lộ diện vĩnh viễn.'
+    ]
+  },
+  bribe_official: {
+    title: 'HỐI LỘ QUAN CHỨC',
+    accent: '#39ff14',
+    bullets: [
+      'Dùng ngân sách thâu tóm để "bôi trơn" hệ thống.',
+      'Giảm trực tiếp 15% chỉ số Suspicion.',
+      'Chi phí: $10,000 (Không tốn AP).'
+    ]
   }
 }
 
@@ -96,6 +114,8 @@ const NPCDialogue = ({ onSkillFocus }) => {
     { id: 'layer', name: 'Tạo lớp (Layering)', cost: 1, color: '#ff4d4d', icon: Building2, description: 'Thiết lập chuỗi ẩn danh => {Công ty ma}.' },
     { id: 'orient', name: 'Định hướng (Orientation)', cost: 2, color: '#ff4d4d', icon: MoveRight, description: 'Kích hoạt luồng tiền => {Định hướng}.' },
     { id: 'loop', name: 'Tạo vòng (Looping)', cost: 2, color: '#ff4d4d', icon: RotateCcw, description: 'Khép kín dòng tiền => {Chu trình}.' },
+    { id: 'high_speed_wash', name: 'Rửa siêu tốc', cost: 2, color: '#ef4444', icon: Zap, description: 'Rửa tiền ngay lập tức => {Rủi ro cao}.' },
+    { id: 'bribe_official', name: 'Hối lộ quan chức', cost: 0, budgetCost: 10000, color: '#39ff14', icon: Shield, description: 'Giảm Suspicion => {Bôi trơn}.' },
   ] : [
     { id: 'bridge', name: 'Dò Cầu (Bridge Hunter)', cost: 20, color: '#00ffff', label: '[DÒ CẦU]', description: 'Truy tìm điểm yếu => {Cầu nối}.' },
     { id: 'disorient', name: 'Giải định chiều', cost: 15, color: '#00ffff', label: '[GIẢI ĐỊNH CHIỀU]', description: 'Vô hiệu hóa luồng tiền => {Nhiễu loạn}.' },

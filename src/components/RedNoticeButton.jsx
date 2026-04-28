@@ -16,14 +16,16 @@ const RedNoticeButton = () => {
     invRedNoticeFreeSkill,
     faction,
     showSitrep,
-    invSelectedNetworkAlgo
+    invSelectedNetworkAlgo,
+    gameStatus,
+    isAnimating
   } = useGameState()
 
   const [phase, setPhase] = useState('idle') // 'idle' | 'flashing' | 'selectSkill'
 
   const escapeRisk = sitrepData?.escapeRisk ?? 0
   const shouldShow = faction === 'investigator' && !hasUsedRedNotice && !showSitrep &&
-    (investigationBudget < 10 || escapeRisk >= 70)
+    (investigationBudget < 10 || escapeRisk >= 70) && gameStatus === 'playing'
 
   const handleActivate = () => {
     setPhase('flashing')
@@ -40,6 +42,33 @@ const RedNoticeButton = () => {
 
   return (
     <>
+      {/* === FLOATING TRIGGER BUTTON (TOP RIGHT) === */}
+      {phase === 'idle' && shouldShow && (
+        <div className="fixed top-6 right-[260px] z-[150] animate-red-notice-throb">
+          <button
+            onClick={handleActivate}
+            disabled={isAnimating}
+            className="px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] relative overflow-hidden group transition-all"
+            style={{
+              background: 'linear-gradient(135deg, rgba(239,68,68,0.9), rgba(153,27,27,0.9))',
+              border: '2px solid rgba(255,255,255,0.2)',
+              color: 'white',
+              boxShadow: '0 0 30px rgba(239,68,68,0.5), inset 0 0 15px rgba(255,255,255,0.2)',
+              backdropFilter: 'blur(8px)'
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 animate-bounce" />
+              <span>RED NOTICE ACTIVATION</span>
+            </div>
+          </button>
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-max">
+            <p className="text-[7px] text-red-400 font-black uppercase tracking-widest opacity-80">Emergency Protocol Ready</p>
+          </div>
+        </div>
+      )}
+
       {/* === FLASHING OVERLAY === */}
       {phase === 'flashing' && (
         <div className="fixed inset-0 z-[10001] pointer-events-none" style={{ animation: 'red-flash-in 1.8s ease-out forwards' }}>

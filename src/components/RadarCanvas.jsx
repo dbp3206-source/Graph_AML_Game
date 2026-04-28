@@ -4,6 +4,7 @@ import useGameState from '../hooks/useGameState'
 import ALGORITHMS from '../utils/algorithms'
 import { Layers, Target, Zap, Eye, MousePointer2, Plus, GitCommit, Trash2, Wand2, Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Shuffle, Wind, Home, ArrowLeft } from 'lucide-react'
 import DeepMoneyRain from './DeepMoneyRain'
+import CustomerDossier from './CustomerDossier'
 
 const EMOJI_MAPS = {
   source: '💰',
@@ -447,6 +448,26 @@ function RadarCanvas() {
           }
         },
         {
+          // Network Analyzer detected nodes — yellow blinking
+          selector: 'node.inv-network-highlight',
+          style: {
+            'border-color': '#fcd34d',
+            'border-width': 10,
+            'shadow-blur': 50,
+            'shadow-color': '#fcd34d',
+            'shadow-opacity': 1,
+            'z-index': 1001
+          }
+        },
+        {
+          selector: 'node.network-blink-off',
+          style: {
+            'opacity': 0.5,
+            'shadow-blur': 15,
+            'border-width': 4
+          }
+        },
+        {
           // Ring-detected nodes — red blinking in Investigator view
           selector: 'node.inv-ring-highlight',
           style: {
@@ -483,6 +504,26 @@ function RadarCanvas() {
             'shadow-color': '#a855f7',
             'shadow-opacity': 1,
             'z-index': 1000
+          }
+        },
+        {
+          selector: 'node.inactive',
+          style: {
+            'opacity': 0.3,
+            'filter': 'grayscale(100%)',
+            'overlay-color': '#000',
+            'overlay-opacity': 0.5,
+            'border-style': 'double',
+            'border-color': '#555'
+          }
+        },
+        {
+          selector: 'edge.high-volume',
+          style: {
+            'line-style': 'solid',
+            'opacity': 1,
+            'shadow-blur': 30,
+            'shadow-opacity': 1
           }
         }
       ]
@@ -555,8 +596,9 @@ function RadarCanvas() {
     graphData.vertices.forEach(v => {
       const existing = cy.getElementById(v.id)
       const baseEmoji = v.emoji || EMOJI_MAPS[v.type] || '⚪'
-      // Frozen node shows lock emoji IN BOTH VIEWS
-      const emoji = v.isFrozen ? `🪦🔒${baseEmoji}` : baseEmoji
+      // Frozen node shows ONLY lock icon
+      let emoji = v.isFrozen ? '🔒' : baseEmoji
+      if (v.isSAR && !v.isFrozen) emoji = `🚩${emoji}`
       const tierColor = tiersColors[v.id] || (isSyndicate ? '#ff4d4d' : '#00ffff')
       
       // Investigator Fog of War: grey everything unless specially flagged
@@ -595,11 +637,12 @@ function RadarCanvas() {
       if (!isSyndicate && v.isFrozen) classes += ' inv-frozen'
       if (isSyndicate && v.isFrozen) classes += ' syn-frozen' // NEW: syndicate sees frozen too
       if (!isSyndicate && v.isHighlighted) {
-        if (v.highlightType === 'network') classes += ' inv-highlight-purple'
+        if (v.highlightType === 'network') classes += ' inv-network-highlight'
         else if (v.highlightType === 'ring') classes += ' inv-ring-highlight'
         else classes += ' inv-highlight-red'
       }
       if (isSyndicate && v.isHighlighted && v.highlightType === 'death_defiance') classes += ' freeze-selectable'
+      if (v.isInactive) classes += ' inactive'
       
       // Freeze selection mode: highlight selectable nodes differently
       const { invFreezeSelectionMode: freezeMode } = useGameState.getState()
@@ -674,6 +717,10 @@ function RadarCanvas() {
           }
         }
 
+        const volume = e.volume || 0
+        const volumeWidth = 6 + Math.min(20, volume / 500)
+        if (volume > 2000) classes += ' high-volume'
+
         cy.add({
           group: 'edges',
           data: {
@@ -683,6 +730,10 @@ function RadarCanvas() {
             customColor: isSyndicate
               ? (customStyle?.color || '#ff4d4d')
               : (e.isHighlighted ? (e.highlightSkill === 'network' ? '#a855f7' : '#ef4444') : '#39ff14')
+          },
+          style: {
+            'width': volumeWidth,
+            'shadow-blur': 15 + Math.min(20, volume / 400)
           },
           classes: classes
         })
@@ -756,6 +807,7 @@ function RadarCanvas() {
     const tick = () => {
       dim = !dim
       cy.nodes('.inv-ring-highlight').toggleClass('ring-blink-off', dim)
+      cy.nodes('.inv-network-highlight').toggleClass('network-blink-off', dim)
       cy.edges('.inv-edge-highlight-red').toggleClass('ring-blink-off', dim)
     }
 
@@ -822,26 +874,7 @@ function RadarCanvas() {
         
         <div ref={containerRef} className="w-full h-full relative z-10" />
 
-        {/* Network Analyzer Blinking Overlay (Investigator only) */}
-        {!isSyndicate && graphData?.vertices.filter(v => v.isHighlighted && v.highlightType === 'network').map(v => {
-          const pos = getNodeScreenPos(v.id)
-          if (!pos) return null
-          return (
-            <div
-              key={`net-blink-${v.id}`}
-              className="absolute z-20 pointer-events-none rounded-full"
-              style={{
-                left: pos.x - 30,
-                top: pos.y - 30,
-                width: 60,
-                height: 60,
-                border: '4px solid #fcd34d',
-                boxShadow: '0 0 40px #fcd34d, inset 0 0 20px #fcd34d',
-                animation: 'inv-blink 0.6s ease-in-out infinite'
-              }}
-            />
-          )
-        })}
+
 
         {/* Floating bounty texts (Investigator only) */}
         {!isSyndicate && invFloatingTexts && invFloatingTexts.map(ft => {
@@ -880,12 +913,10 @@ function RadarCanvas() {
         </div>
         
         {selectedNode && !invFreezeSelectionMode && !deathDefianceSelectionMode && (
-          <div className="absolute top-3 right-3 glass-panel px-3 py-1.5 rounded-lg z-20">
-            <p className="text-sm font-bold text-white">
-              <span className="text-white/40 uppercase text-[10px] block">Target Selected</span>
-              <span className="text-inv-cyan">{graphData.vertices.find(v => v.id === selectedNode)?.displayName || selectedNode}</span>
-            </p>
-          </div>
+          <CustomerDossier 
+            nodeId={selectedNode} 
+            onClose={() => setSelectedNode(null)} 
+          />
         )}
 
         {/* Freeze Selection Mode Overlay */}

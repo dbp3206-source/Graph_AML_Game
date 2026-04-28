@@ -17,6 +17,7 @@ import {
   Activity
 } from 'lucide-react';
 import useGameState from '../hooks/useGameState';
+import SuspicionChart from './SuspicionChart';
 
 const INTEL_CONTENT = {
   base: {
@@ -53,7 +54,8 @@ const FinanceReportModal = () => {
     closeFinanceReport, 
     turn,
     moneyLaundered, 
-    targetMoney 
+    targetMoney,
+    launderedHistory
   } = useGameState();
 
   const [activeIntel, setActiveIntel] = useState(null);
@@ -87,11 +89,7 @@ const FinanceReportModal = () => {
       <div className="absolute inset-0 bg-amber-500/5 pointer-events-none" />
       <div className="digital-noise" />
       
-      <div className="ledger-modal relative w-full max-w-lg overflow-hidden border-2 border-amber-500/50 bg-[#060401] p-8 shadow-[0_0_80px_rgba(245,158,11,0.2),inset_0_0_30px_rgba(245,158,11,0.1)] animate-gold-glow">
-        
-        {/* Interference Overlays */}
-        <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_50%_50%,rgba(245,158,11,0.1),transparent_70%)] z-10" />
-        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.3)_50%)] bg-[length:100%_4px] z-10 opacity-20" />
+      <div className="ledger-modal relative w-full max-w-6xl overflow-hidden border-2 border-amber-500/50 bg-[#060401] p-8 shadow-[0_0_80px_rgba(245,158,11,0.2),inset_0_0_30px_rgba(245,158,11,0.1)] animate-gold-glow">
         
         {/* Header Section */}
         <div className="relative z-20 space-y-6">
@@ -111,137 +109,157 @@ const FinanceReportModal = () => {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-amber-500/50 uppercase font-black tracking-widest">KIỂM SOÁT</p>
+              <p className="text-[10px] text-amber-500/50 uppercase font-black tracking-widest">KIỂM SOÁT MẠNG LƯỚI</p>
               <p className="text-lg font-black text-[#39ff14] family-mono flex items-center justify-end gap-1">
-                {totalNodes} <span className="text-xs text-amber-500/40">/ 5</span>
+                {totalNodes} <span className="text-xs text-amber-500/40">/ 5 VÙNG</span>
               </p>
             </div>
           </div>
 
-          {/* Money Breakdown */}
-          <div className="ledger-grid space-y-4 font-mono">
-            <div className="ledger-line flex justify-between items-center text-sm px-1">
-              <span className="text-amber-500/70 uppercase flex items-center gap-2 font-black">
-                <Briefcase className="w-4 h-4 text-amber-400" /> TIỀN BẨN TRỮ KHO:
-              </span>
-              <span className="ledger-money text-[#39ff14] font-black text-xl drop-shadow-[0_0_10px_rgba(57,255,20,0.3)]">${currentBudgetBefore.toLocaleString()}</span>
-            </div>
-            
-            <div className="h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent my-1" />
-
-            <div className="grid grid-cols-1 gap-2">
-              {[
-                { key: 'base', icon: TrendingUp, label: 'Trợ cấp hắc đạo', val: `+$${base}`, color: 'amber' },
-                { key: 'smurf', icon: Coins, label: 'Rửa tiền chân rết', val: `+$${smurf}`, color: 'amber' },
-                { key: 'layer', icon: Ghost, label: 'Lãi mạng lưới ma', val: `+$${layer}`, color: 'cyan' },
-                { key: 'loop', icon: RefreshCw, label: 'Vòng lặp sạch hóa', val: `+$${loop}`, color: 'amber', anim: 'animate-spin-slow' },
-                { key: 'upkeep', icon: ShieldAlert, label: 'Chi phí bôi trơn', val: `-$${upkeep}`, color: 'red', condition: upkeep > 0 }
-              ].map((item, index) => (
-                <div key={item.key} className="space-y-1" style={{ animationDelay: `${index * 70}ms` }}>
-                  <button 
-                    onClick={() => toggleIntel(item.key)}
-                    className={`ledger-line flex justify-between items-center w-full p-3 bg-[#0a0805] border transition-all rounded-lg group
-                      ${activeIntel === item.key ? 'border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3),inset_0_0_10px_rgba(245,158,11,0.2)]' : 'border-amber-500/30 hover:border-amber-400/80 hover:shadow-[0_0_10px_rgba(245,158,11,0.15)]'}
-                      ${item.key === 'upkeep' && !item.condition ? 'opacity-30 hover:opacity-50' : ''}
-                    `}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-1.5 rounded bg-${item.color}-500/10 group-hover:bg-${item.color}-500/20`}>
+          <div className="flex flex-col md:flex-row gap-8">
+            {/* LEFT COLUMN: DETAILED STATS */}
+            <div className="flex-1 space-y-4">
+              <div className="flex justify-between items-center text-xs px-1 border-b border-amber-500/20 pb-2">
+                <span className="text-amber-500 font-black uppercase tracking-widest">Chi tiết dòng tiền</span>
+                <span className="text-amber-500/50 font-mono italic">TRANSACTION_LOGS</span>
+              </div>
+              
+              <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                {[
+                  { key: 'base', icon: TrendingUp, label: 'Trợ cấp hắc đạo', val: `+$${base}`, color: 'amber' },
+                  { key: 'smurf', icon: Coins, label: 'Rửa tiền chân rết', val: `+$${smurf}`, color: 'amber' },
+                  { key: 'layer', icon: Ghost, label: 'Lãi mạng lưới ma', val: `+$${layer}`, color: 'cyan' },
+                  { key: 'loop', icon: RefreshCw, label: 'Vòng lặp sạch hóa', val: `+$${loop}`, color: 'amber', anim: 'animate-spin-slow' },
+                  { key: 'upkeep', icon: ShieldAlert, label: 'Chi phí bôi trơn', val: `-$${upkeep}`, color: 'red', condition: upkeep > 0 }
+                ].map((item, index) => (
+                  <div key={item.key} className="space-y-1">
+                    <button 
+                      onClick={() => toggleIntel(item.key)}
+                      className={`flex justify-between items-center w-full p-3 bg-black/40 border transition-all rounded-lg group
+                        ${activeIntel === item.key ? 'border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-amber-500/10 hover:border-amber-500/30'}
+                        ${item.key === 'upkeep' && !item.condition ? 'opacity-20 pointer-events-none' : ''}
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
                         <item.icon className={`w-3.5 h-3.5 text-${item.color}-400 ${item.anim || ''}`} />
+                        <span className="text-amber-100/60 text-[10px] font-bold uppercase tracking-tight">{item.label}</span>
                       </div>
-                      <span className="text-amber-100/70 text-xs font-bold uppercase tracking-tight flex items-center gap-2">
-                        {item.label}
-                        <Info className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
-                      </span>
-                    </div>
-                    <span className={`ledger-money font-black ${item.color === 'red' ? 'ledger-negative text-red-500' : 'text-[#39ff14]'}`}>{item.val}</span>
-                  </button>
+                      <span className={`font-mono font-black ${item.color === 'red' ? 'text-red-500' : 'text-[#39ff14]'}`}>{item.val}</span>
+                    </button>
+                    {activeIntel === item.key && (
+                      <div className="mx-2 p-3 bg-amber-500/5 border-l-2 border-amber-400/60 rounded-r animate-in slide-in-from-top-1 duration-200">
+                        <p className="text-[10px] text-amber-200/70 leading-relaxed">{INTEL_CONTENT[item.key].desc}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-                  {/* Intel Content */}
-                  {activeIntel === item.key && (
-                    <div className="mx-2 p-3 bg-amber-500/5 border-l-2 border-amber-400/60 rounded-r animate-in slide-in-from-top-1 duration-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-black text-amber-500/60 tracking-widest flex items-center gap-1 uppercase">
-                          <Activity className="w-2 h-2" /> SOURCE_INTEL: {INTEL_CONTENT[item.key].tag}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-amber-200/80 leading-relaxed italic">
-                        {INTEL_CONTENT[item.key].desc}
-                      </p>
-                    </div>
-                  )}
+            {/* MIDDLE COLUMN: GROWTH CHART */}
+            <div className="w-full md:w-[320px] flex flex-col justify-center">
+              <div className="p-4 bg-black/60 rounded-2xl border border-amber-500/20 shadow-inner relative overflow-hidden h-full flex flex-col">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.1),transparent_70%)]" />
+                <div className="mb-4 flex items-center justify-between relative z-10">
+                  <div className="flex items-center gap-2 text-amber-500">
+                    <TrendingUp className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Tăng trưởng dòng tiền</span>
+                  </div>
+                  <span className="text-[8px] font-mono text-amber-500/40">ANALYTICS_V2.1</span>
                 </div>
-              ))}
-            </div>
-
-            {/* Total Profit */}
-            <div className="pt-4 mt-4">
-              <div className={`ledger-line flex justify-between items-center p-5 rounded-xl border-t-2 border-b-2 shadow-2xl ${isProfit ? 'border-amber-500/80 bg-amber-900/20' : 'border-red-500/80 bg-red-950/40'}`}>
-                <span className={`text-lg font-black tracking-[0.2em] uppercase ${isProfit ? 'text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.6)]' : 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.6)]'}`}>LỢI NHUẬN RÒNG:</span>
-                <span className={`ledger-money text-3xl font-black drop-shadow-[0_0_15px_rgba(57,255,20,0.5)] ${isProfit ? 'text-[#39ff14]' : 'ledger-negative text-red-500'}`}>
-                  {isProfit ? '+' : ''}${netIncome}
-                </span>
+                
+                <div className="flex-1 min-h-[200px] flex items-center relative z-10">
+                   <SuspicionChart 
+                    data={launderedHistory || [0]} 
+                    color="#f59e0b" 
+                    height={180} 
+                    max={targetMoney || 150000} 
+                  />
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-amber-500/10 relative z-10">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] text-amber-500/40 uppercase font-black">Lượt hiện tại:</span>
+                    <span className="text-[10px] text-amber-400 font-mono">#{turn}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-amber-500/40 uppercase font-black">Hiệu suất:</span>
+                    <span className="text-[10px] text-[#39ff14] font-mono">+{(launderedThisRound / 1000).toFixed(1)}k/R</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Final Treasury */}
-            <div className="ledger-line flex justify-between items-center p-4 bg-[#050b10] border border-cyan-500/40 rounded-lg mt-4 shadow-[inset_0_0_30px_rgba(6,182,212,0.1),0_0_15px_rgba(6,182,212,0.1)] relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/5 to-transparent animate-pulse-slow pointer-events-none" />
-              <span className="relative z-10 text-cyan-400/90 uppercase font-black italic text-xs flex items-center gap-2 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">
-                <Terminal className="w-4 h-4" /> NGÂN KHỐ HIỆN CÓ:
-              </span>
-              <span className="ledger-money text-2xl text-[#39ff14] font-black italic drop-shadow-[0_0_15px_rgba(57,255,20,0.4)]">
-                ${(currentBudgetBefore + netIncome).toLocaleString()}
-              </span>
-            </div>
+            {/* RIGHT COLUMN: SUMMARY & ACTION */}
+            <div className="w-full md:w-[340px] flex flex-col space-y-6">
+              {/* Net Profit Big Card */}
+              <div className={`p-6 rounded-2xl border-2 flex flex-col items-center justify-center text-center relative overflow-hidden
+                ${isProfit ? 'border-amber-500/50 bg-amber-500/5' : 'border-red-500/50 bg-red-500/5'}
+              `}>
+                <div className={`absolute top-0 inset-x-0 h-1 ${isProfit ? 'bg-amber-500' : 'bg-red-500'}`} />
+                <p className={`text-[10px] font-black tracking-[0.3em] uppercase mb-1 ${isProfit ? 'text-amber-500/70' : 'text-red-500/70'}`}>Lợi nhuận ròng</p>
+                <h3 className={`text-4xl font-black font-mono mb-2 ${isProfit ? 'text-[#39ff14] drop-shadow-[0_0_15px_rgba(57,255,20,0.4)]' : 'text-red-500'}`}>
+                  {isProfit ? '+' : ''}${netIncome.toLocaleString()}
+                </h3>
+                <div className="flex items-center gap-2 px-3 py-1 bg-black/40 rounded-full border border-white/5">
+                  <DollarSign className={`w-3 h-3 ${isProfit ? 'text-[#39ff14]' : 'text-red-400'}`} />
+                  <span className="text-[10px] font-mono text-white/50">Lợi nhuận lượt này</span>
+                </div>
+              </div>
 
-            <div className="h-px bg-amber-500/30 my-4" />
+              {/* Treasury & Progress */}
+              <div className="space-y-4">
+                <div className="p-4 bg-cyan-500/5 border border-cyan-500/30 rounded-xl relative">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] text-cyan-400 font-black uppercase tracking-widest flex items-center gap-2">
+                      <Terminal className="w-3.5 h-3.5" /> Ngân khố hiện có
+                    </span>
+                    <span className="text-xs text-[#39ff14] font-mono font-black">${(currentBudgetBefore + netIncome).toLocaleString()}</span>
+                  </div>
+                  <div className="h-1 bg-cyan-500/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-cyan-400 w-full animate-pulse-slow" />
+                  </div>
+                </div>
 
-            {/* Progress Section */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-[11px] px-1">
-                  <span className="text-amber-500/60 uppercase font-black tracking-widest italic">THU HOẠCH LƯỢT NÀY:</span>
-                  <span className="text-[#39ff14] font-black text-sm">+{launderedThisRound.toLocaleString()} USD</span>
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[9px] text-white/40 font-black uppercase tracking-widest">Tiến độ thâu tóm</span>
+                    <span className="text-xs text-amber-400 font-mono font-black">{totalLaunderedPercent}%</span>
+                  </div>
+                  <div className="h-2 bg-black/40 rounded-full overflow-hidden p-[1px]">
+                    <div 
+                      className="h-full bg-gradient-to-r from-amber-600 to-yellow-300 rounded-full shadow-[0_0_10px_rgba(245,158,11,0.5)] transition-all duration-1000"
+                      style={{ width: `${totalLaunderedPercent}%` }}
+                    />
+                  </div>
+                  <p className="text-[8px] text-amber-500/40 font-mono mt-2 text-right uppercase italic">Target: ${targetMoney.toLocaleString()}</p>
+                </div>
               </div>
-              <div className="relative h-2.5 bg-black/50 rounded-full overflow-hidden border border-amber-500/20 p-[1px]">
-                <div 
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-600 via-[#39ff14] to-yellow-400 shadow-[0_0_10px_rgba(57,255,20,0.5)] transition-all duration-1000"
-                  style={{ width: `${totalLaunderedPercent}%` }}
-                />
-              </div>
-              <div className="flex justify-between items-center px-1">
-                  <span className="text-amber-400 font-bold text-[10px] uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Zap className="w-3 h-3 text-yellow-400" /> TIẾN ĐỘ THÂU TÓM
-                  </span>
-                  <span className="text-amber-400 font-black text-sm tracking-[0.2em]">{totalLaunderedPercent}%</span>
-              </div>
+
+              {/* Action Button */}
+              <button 
+                onClick={closeFinanceReport}
+                className="group relative w-full overflow-hidden border-2 border-amber-500 bg-amber-950/40 px-6 py-5 transition-all hover:bg-amber-400 active:scale-[0.98] rounded-xl shadow-[0_0_30px_rgba(245,158,11,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                <div className="relative flex items-center justify-center space-x-3 text-amber-400 group-hover:text-black font-black tracking-[0.3em] uppercase text-xs">
+                  <span>XÁC NHẬN PHI VỤ</span>
+                  <ChevronRight className="w-5 h-5 animate-bounce-x" />
+                </div>
+              </button>
             </div>
           </div>
-
-          {/* Action Button */}
-          <button 
-            onClick={closeFinanceReport}
-            className="group relative w-full overflow-hidden border-2 border-amber-500 bg-amber-950/40 px-6 py-5 transition-all hover:bg-amber-400 active:scale-[0.98] mt-4 rounded-lg shadow-[0_0_20px_rgba(245,158,11,0.2)]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-            <div className="relative flex items-center justify-center space-x-4 text-amber-400 group-hover:text-black font-black tracking-[0.4em] uppercase text-sm">
-              <span>XÁC NHẬN PHI VỤ</span>
-              <ChevronRight className="w-6 h-6 animate-bounce-x" />
-            </div>
-          </button>
         </div>
 
+        {/* Action Button Mobile (Fallback) */}
         {/* Decorative corner accents */}
-        <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden pointer-events-none opacity-40">
-          <div className="absolute top-[-40px] right-[-40px] w-40 h-40 border-2 border-cyan-500 rotate-45" />
-        </div>
-        <div className="absolute bottom-0 left-0 w-20 h-20 overflow-hidden pointer-events-none opacity-40">
-          <div className="absolute bottom-[-40px] left-[-40px] w-40 h-40 border-2 border-red-500 rotate-45" />
+        <div className="absolute top-0 right-0 w-24 h-24 overflow-hidden pointer-events-none opacity-20">
+          <div className="absolute top-[-50px] right-[-50px] w-48 h-48 border-2 border-amber-500 rotate-45" />
         </div>
         
-        <div className="absolute bottom-2 right-4 flex gap-6 text-[8px] text-cyan-500/40 font-mono tracking-widest">
-            <span className="flex items-center gap-1 uppercase">Connection: Encrypted</span>
-            <span className="flex items-center gap-1 uppercase">Stream: Active</span>
+        <div className="absolute bottom-3 right-6 flex gap-6 text-[8px] text-amber-500/30 font-mono tracking-widest">
+            <span className="flex items-center gap-1 uppercase">Secure Connection: Active</span>
+            <span className="flex items-center gap-1 uppercase">Ledger: Encrypted</span>
         </div>
       </div>
     </div>

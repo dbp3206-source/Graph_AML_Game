@@ -80,6 +80,11 @@ const useGameState = create(
       deathDefianceSelectedNodes: [],
       deathDefiancePendingCost: 0,
       deathDefiancePendingAp: 0,
+      suspicionHistory: [5],
+      launderedHistory: [0],
+      incomeHistory: [0],
+      expenseHistory: [0],
+
 
       // ===== INVESTIGATOR STATE (NEW - DO NOT TOUCH SYNDICATE) =====
       investigationBudget: 100,
@@ -404,7 +409,17 @@ const useGameState = create(
           budget: state.budget - constructionCost,
           graphData: {
             ...state.graphData,
-            vertices: [...state.graphData.vertices, { ...node, displayName, emoji, isRevealed: false }]
+            vertices: [...state.graphData.vertices, { 
+              ...node, 
+              displayName, 
+              emoji, 
+              isRevealed: false, 
+              isInactive: false, 
+              isSAR: false, 
+              skillHistory: [],
+              lockedTurnCount: 0,
+              risk: Math.floor(Math.random() * 30) + 10
+            }]
           }
         }
       }),
@@ -419,14 +434,14 @@ const useGameState = create(
         else if (EMOJI_MAPS[node.type]) emoji = EMOJI_MAPS[node.type]
 
         const displayName = node.label || `${typeLabels[node.type] || 'Node'}`
-        const newNode = { ...node, displayName, emoji }
+        const newNode = { ...node, displayName, emoji, isRevealed: false, isInactive: false, isSAR: false, skillHistory: [] }
         
         return {
           budget: state.budget - constructionCost,
           graphData: {
             ...state.graphData,
-            vertices: [...state.graphData.vertices, { ...newNode, isRevealed: false }],
-            edges: [...state.graphData.edges, { u, v: node.id }]
+            vertices: [...state.graphData.vertices, newNode],
+            edges: [...state.graphData.edges, { u, v: node.id, volume: 0 }]
           }
         }
       }),
@@ -454,7 +469,7 @@ const useGameState = create(
         return {
           graphData: {
             ...state.graphData,
-            edges: [...state.graphData.edges, { u, v }]
+            edges: [...state.graphData.edges, { u, v, volume: 0 }]
           }
         }
       }),
@@ -536,9 +551,25 @@ const useGameState = create(
               removedEdges,
               escapeRisk,
               totalNodes: vertices.length,
-            }
+            },
+            graphData: graphData ? {
+              ...graphData,
+              vertices: vertices.map(v => ({ ...v, isInactive: false, isHighlighted: false, highlightType: null })),
+              edges: edges.map(e => ({ ...e, volume: (e.volume || 0) * 0.5, isHighlighted: false, highlightSkill: null })) // Decay volume and clear highlights
+            } : graphData
           })
           
+          // Check for high-value transactions to alert Investigator
+          const highVolumeEdges = edges.filter(e => e.volume > 5000)
+          if (highVolumeEdges.length > 0) {
+            addNews({
+              type: 'alert',
+              title: '🚨 GIAO DỊCH LỚN',
+              summary: 'High-Value Transaction Detected',
+              message: `Hệ thống quét thấy dòng tiền bất thường tại {${highVolumeEdges.length}} tuyến giao dịch.`
+            })
+          }
+
           addNews({
             type: 'investigator',
             title: '🕵️ Lượt Investigator',
@@ -599,13 +630,39 @@ const useGameState = create(
             financeReportData: economyResults,
             showWashNotification: false,
             gameStatus: isWinning ? 'syndicate_win' : 'playing',
+            suspicionHistory: [...(get().suspicionHistory || []), get().suspicion],
+            launderedHistory: [...(get().launderedHistory || []), get().moneyLaundered],
+            incomeHistory: [...(get().incomeHistory || []), economyResults.base + economyResults.smurf + economyResults.layer + economyResults.loop],
+            expenseHistory: [...(get().expenseHistory || []), economyResults.upkeep],
             graphData: get().graphData ? {
               ...get().graphData,
-              vertices: get().graphData.vertices.map(v =>
-                v.isFrozen ? { ...v, lockedTurnCount: (v.lockedTurnCount || 0) + 1 } : v
-              )
+              vertices: get().graphData.vertices.map(v => ({
+                ...v,
+                lockedTurnCount: v.isFrozen ? (v.lockedTurnCount || 0) + 1 : v.lockedTurnCount,
+                isHighlighted: false,
+                highlightType: null
+              })),
+              edges: get().graphData.edges.map(e => {
+                const update = (economyResults.volumeIncrements || []).find(up => up.u === e.u && up.v === e.v);
+                return { 
+                  ...(update ? { ...e, volume: (e.volume || 0) + update.addVolume } : e),
+                  isHighlighted: false,
+                  highlightSkill: null
+                };
+              })
             } : get().graphData
           })
+
+          // Check for High Volume Transactions
+          const flaggedEdges = get().graphData?.edges.filter(e => (e.volume || 0) > 8000) || []
+          if (flaggedEdges.length > 0) {
+            addNews({
+              type: 'investigator',
+              title: '⚠️ CẢNH BÁO LƯU LƯỢNG',
+              summary: 'High-Value Path Detected',
+              message: `Phát hiện ${flaggedEdges.length} tuyến đường có lưu lượng tích lũy > $8,000.`
+            })
+          }
 
           if (isWinning) {
             addNews({
@@ -630,7 +687,7 @@ const useGameState = create(
 
         const vertices = graphData.vertices
         const edges = graphData.edges
-        const safeNodes = vertices.filter(v => !v.isRevealed && !v.isFrozen)
+        const safeNodes = vertices.filter(v => !v.isRevealed && !v.isFrozen && !v.isInactive)
         const safeNodeIds = new Set(safeNodes.map(v => v.id))
 
         // 1. Base Income
@@ -691,11 +748,24 @@ const useGameState = create(
           }
         })
         
+        const volumeIncrements = []
+
         // Loops: $4000 each SCC (Giảm từ 5000)
         sccResult.comps.forEach(comp => {
           if (comp.length > 1) {
             const isSafe = comp.every(id => safeNodeIds.has(id))
-            if (isSafe) launderedThisRound += 5500 // Tăng từ 4000
+            if (isSafe) {
+              const yieldAmount = 5500
+              launderedThisRound += yieldAmount
+              // Calculate volume increments for edges in this SCC
+              comp.forEach(uId => {
+                edges.forEach(e => {
+                  if (comp.includes(e.u) && comp.includes(e.v)) {
+                    volumeIncrements.push({ u: e.u, v: e.v, addVolume: yieldAmount / 2 })
+                  }
+                })
+              })
+            }
           }
         })
 
@@ -710,7 +780,8 @@ const useGameState = create(
           netIncome,
           launderedThisRound, // Kết quả rửa tiền lượt này
           totalNodes,
-          currentBudgetBefore: get().budget
+          currentBudgetBefore: get().budget,
+          volumeIncrements
         }
       },
 
@@ -790,7 +861,10 @@ const useGameState = create(
             emoji: v.emoji || (v.type === 'personal' ? (Math.random() > 0.5 ? '👦' : '👧') : EMOJI_MAPS[v.type] || '⚪'),
             isRevealed: false,
             isFrozen: false,
-            lockedTurnCount: 0
+            isInactive: false,
+            skillHistory: [],
+            lockedTurnCount: 0,
+            risk: Math.floor(Math.random() * 40) + 10 // Initial risk
           }
         })
 
@@ -798,15 +872,21 @@ const useGameState = create(
         set({
           currentScreen: 'game',
           scenario: selectedLevel,
-          graphData: sc,
+          graphData: {
+            ...sc,
+            edges: (sc.edges || []).map(e => ({ ...e, volume: 0 }))
+          },
           gameStatus: 'playing',
           pendingOutcome: null,
           turn: 1,
           ap: 6,
           maxAp: 6,
-          budget: 100, 
           suspicion: 5,
+          suspicionHistory: [5],
           moneyLaundered: 0,
+          launderedHistory: [0],
+          incomeHistory: [0],
+          expenseHistory: [0],
           targetMoney: 150000, // Đặt mục tiêu thắng là 150k
           algorithmSteps: [],
           currentStepIndex: 0,
@@ -906,7 +986,13 @@ const useGameState = create(
         invFreezeMax: 0,
         invFreezePendingCost: 0,
         invFreezePendingAp: 0,
-        showFreezeCountModal: false
+        invFreezePendingAp: 0,
+        showFreezeCountModal: false,
+        suspicionHistory: [5],
+        launderedHistory: [0],
+        incomeHistory: [0],
+        expenseHistory: [0],
+        targetMoney: 150000
       }),
 
 
@@ -1057,6 +1143,43 @@ const useGameState = create(
               title: '💸 Chia nhỏ', 
               summary: 'Phân tách dòng tiền',
               message: `Phân tách => {Tài khoản cá nhân} x2 => Từ nguồn: ${source}` 
+            })
+          } else if (skill.id === 'high_speed_wash') {
+            const bonus = 15000
+            const suspicionPenalty = 20
+            const structures = get().syndicateCustomStyles
+            const allNodeIds = [...new Set(structures.flatMap(s => s.nodes))]
+            
+            set(state => ({
+              moneyLaundered: state.moneyLaundered + bonus,
+              suspicion: Math.min(100, state.suspicion + suspicionPenalty),
+              graphData: {
+                ...state.graphData,
+                vertices: state.graphData.vertices.map(v => 
+                  allNodeIds.includes(v.id) ? { ...v, isRevealed: true } : v
+                )
+              },
+              showWashNotification: true,
+              lastWashedAmount: bonus
+            }))
+            addNews({
+              type: 'alert',
+              title: '🚀 RỬA SIÊU TỐC',
+              summary: 'High-Speed Wash',
+              message: `Giao dịch khẩn cấp => +$${bonus.toLocaleString()} => Mạng lưới bị lộ diện!`
+            })
+          } else if (skill.id === 'bribe_official') {
+            const cost = 10000
+            const reduction = 15
+            set(state => ({
+              budget: state.budget - cost,
+              suspicion: Math.max(0, state.suspicion - reduction)
+            }))
+            addNews({
+              type: 'syndicate',
+              title: '🧧 HỐI LỘ QUAN CHỨC',
+              summary: 'Official bribed',
+              message: `Chi $${cost.toLocaleString()} bôi trơn hệ thống => Suspicion -${reduction}%`
             })
           }
         } else {
@@ -1607,9 +1730,27 @@ const useGameState = create(
           invFloatingTexts: [...s.invFloatingTexts, { id: `ft-freeze-${nodeId}-${Date.now()}`, nodeId, text: `+$${bountyPerNode}`, color: '#a855f7' }],
           graphData: {
             ...s.graphData,
-            vertices: s.graphData.vertices.map(v =>
-              v.id === nodeId ? { ...v, isFrozen: true, lockedTurnCount: 0, isHighlighted: false, highlightType: null } : v
-            ),
+            vertices: s.graphData.vertices.map(v => {
+              if (v.id === nodeId) {
+                return { 
+                  ...v, 
+                  isFrozen: true, 
+                  lockedTurnCount: 0, 
+                  isHighlighted: false, 
+                  highlightType: null,
+                  isSAR: true, // Marking as SAR when frozen/captured
+                  skillHistory: [...(v.skillHistory || []), { skillName: 'FREEZE', turn: s.turn }]
+                }
+              }
+              // Mark neighbors as inactive
+              const isNeighbor = s.graphData.edges.some(e => 
+                (e.u === nodeId && e.v === v.id) || (e.v === nodeId && e.u === v.id)
+              )
+              if (isNeighbor && !v.isFrozen) {
+                return { ...v, isInactive: true }
+              }
+              return v
+            }),
             edges: newRemaining === 0
               ? s.graphData.edges.map(e => e.highlightSkill === 'network' ? { ...e, isHighlighted: false, highlightSkill: null } : e)
               : s.graphData.edges

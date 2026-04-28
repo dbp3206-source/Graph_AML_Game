@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Search, Network, Compass, RotateCcw, Zap, X, ChevronDown, Lock, AlertTriangle, Target, Shield, Activity, Circle } from 'lucide-react'
 import useGameState from '../hooks/useGameState'
+import SuspicionChart from './SuspicionChart'
 
 const SKILL_INFO = {
   ring: {
@@ -339,7 +340,8 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
     invFreezeRemaining,
     invFreezeMax,
     animationSpeed,
-    setAnimationSpeed
+    setAnimationSpeed,
+    suspicionHistory
   } = useGameState()
 
   const disabled = gameStatus !== 'playing' || isAnimating || showSitrep || invFreezeSelectionMode
@@ -394,6 +396,8 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
           </div>
         </div>
       )}
+
+
 
       {/* Agent Card */}
       <div className="p-4 mb-4 rounded-xl relative overflow-hidden"
@@ -481,26 +485,32 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
         </div>
       </div>
 
-      {/* Graph traversal speed */}
-      <div className="mb-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-black uppercase tracking-widest text-cyan-300/70">Tốc độ duyệt đồ thị</p>
-          <p className="resource-number font-mono text-sm font-black text-cyan-200">{animationSpeed}ms</p>
+      {/* INTELLIGENCE DASHBOARD AREA */}
+      <div className="mb-4 p-4 rounded-xl border border-inv-cyan/10 bg-black/40 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-inv-cyan" />
+            <h3 className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Intel Dashboard</h3>
+          </div>
+          <span className="text-[9px] font-mono text-inv-cyan/50 animate-pulse">SYSTEM LIVE</span>
         </div>
-        <input
-          type="range"
-          min="350"
-          max="1200"
-          step="50"
-          value={animationSpeed}
-          onChange={(event) => setAnimationSpeed(Number.parseInt(event.target.value, 10))}
-          className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-cyan-400/20 accent-cyan-300"
-        />
-        <div className="mt-1 flex justify-between font-mono text-xs font-black uppercase text-cyan-300/45">
-          <span>Nhanh</span>
-          <span>Chậm</span>
+
+        {/* Chart Section - Income vs Expense Correlation */}
+        <div className="flex flex-col gap-2">
+          <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">Tương quan Thu - Chi (Syndicate)</p>
+          <div className="h-28 bg-black/20 rounded-lg border border-white/5 p-4 pt-8">
+            <SuspicionChart 
+              datasets={[
+                { data: useGameState.getState().incomeHistory || [0], color: '#39ff14', label: 'Thu' },
+                { data: useGameState.getState().expenseHistory || [0], color: '#ef4444', label: 'Chi' }
+              ]}
+              height={80}
+            />
+          </div>
         </div>
       </div>
+
+
 
       {/* Skill Cards */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
@@ -558,29 +568,7 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
         />
       </div>
 
-      {/* Red Notice Button */}
-      {showRedNotice && (
-        <div className="mt-3 pt-3 border-t border-red-500/20">
-          <button
-            onClick={activateRedNotice}
-            className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest relative overflow-hidden group"
-            style={{
-              background: 'linear-gradient(135deg, rgba(239,68,68,0.25), rgba(239,68,68,0.1))',
-              border: '2px solid rgba(239,68,68,0.7)',
-              color: '#ef4444',
-              boxShadow: '0 0 25px rgba(239,68,68,0.3)',
-              animation: 'red-notice-throb 1.5s ease-in-out infinite'
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-400/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-            <div className="flex items-center justify-center gap-2 relative">
-              <AlertTriangle className="w-4 h-4 animate-bounce" />
-              <span>🚨 RED NOTICE — MIỄN PHÍ</span>
-            </div>
-            <p className="text-[8px] text-red-400/60 font-mono mt-0.5">+$50 KHẨN CẤP | XÓA SƯƠNG MÙ | 1 KỸ NĂNG FREE</p>
-          </button>
-        </div>
-      )}
+
     </div>
   )
 }

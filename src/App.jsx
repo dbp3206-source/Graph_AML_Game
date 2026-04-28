@@ -46,7 +46,8 @@ function App() {
     algorithmMonitorHeight,
     setAlgorithmMonitorHeight,
     nextTurn,
-    isAnimating
+    isAnimating,
+    suspicionProgress
   } = useGameState()
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(340)
@@ -253,6 +254,10 @@ function App() {
       )}
 
       <WinLossOverlay />
+
+      {suspicionProgress > 80 && (
+        <div className="suspicion-critical" />
+      )}
 
       <FreezeCountModal />
       <RedNoticeButton />
