@@ -1,21 +1,57 @@
+/**
+ * Graph Algorithms for AML Asymmetry.
+ *
+ * CHANGELOG:
+ * - [BUG-01] tarjan() now uses buildDirectedAdj so SCCs are detected correctly
+ *   on directed graphs (money flows have direction).
+ * - [BUG-04] findCycles() normalises adjacency to avoid false positives from
+ *   parallel/multi-edges between the same pair of nodes.
+ * - Added depth-limit to BFS/DFS to prevent stack overflow on large graphs.
+ */
+
+const MAX_TRAVERSAL_DEPTH = 200
+
 const ALGORITHMS = {
-  buildAdj: function(vertices, edges, directed = false) {
+  // ── Adjacency helpers ─────────────────────────────────────────────────────
+
+  /** Undirected adjacency list */
+  buildAdj(vertices, edges) {
     const adj = {}
     vertices.forEach(v => { adj[v.id] = [] })
     edges.forEach(e => {
       if (!adj[e.u]) adj[e.u] = []
       if (!adj[e.v]) adj[e.v] = []
       adj[e.u].push(e.v)
-      if (!directed) adj[e.v].push(e.u)
+      adj[e.v].push(e.u)
     })
     return adj
   },
 
-  buildDirectedAdj: function(vertices, edges) {
-    return this.buildAdj(vertices, edges, true)
+  /** Directed adjacency list (u → v only) */
+  buildDirectedAdj(vertices, edges) {
+    const adj = {}
+    vertices.forEach(v => { adj[v.id] = [] })
+    edges.forEach(e => {
+      if (!adj[e.u]) adj[e.u] = []
+      adj[e.u].push(e.v)
+    })
+    return adj
   },
 
-  bfs: function(vertices, edges, start) {
+  /** Reversed directed adjacency (v → u) for Kosaraju step-2 */
+  buildTransposeAdj(vertices, edges) {
+    const adj = {}
+    vertices.forEach(v => { adj[v.id] = [] })
+    edges.forEach(e => {
+      if (!adj[e.v]) adj[e.v] = []
+      adj[e.v].push(e.u)
+    })
+    return adj
+  },
+
+  // ── BFS ───────────────────────────────────────────────────────────────────
+
+  bfs(vertices, edges, start) {
     const adj = this.buildAdj(vertices, edges)
     const dist = {}
     const parent = {}
@@ -32,15 +68,7 @@ const ALGORITHMS = {
         else if (v.id === u) nodeStatus[v.id] = 'active'
         else nodeStatus[v.id] = 'unvisited'
       })
-      steps.push({ 
-        msg, 
-        nodeStatus, 
-        highlightEdge, 
-        dist: { ...dist }, 
-        parent: { ...parent },
-        queue: [...currentQueue], // Tracking Queue for TracePanel
-        type: 'queue'
-      })
+      steps.push({ msg, nodeStatus, highlightEdge, dist: { ...dist }, parent: { ...parent }, queue: [...currentQueue], type: 'queue' })
     }
 
     pushStep(start, `📡 Bắt đầu truy vết dòng tiền từ điểm xuất phát ${start}`, null, q)
@@ -48,14 +76,14 @@ const ALGORITHMS = {
 
     while (q.length > 0) {
       const u = q.shift()
-      pushStep(u, `🔍 Đang phân tích kỹ thuật tài khoản ${u}`, null, q)
+      pushStep(u, `🔍 Đang phân tích tài khoản ${u}`, null, q)
       ;(adj[u] || []).forEach(v => {
         if (!visited.has(v)) {
           visited.add(v)
           dist[v] = dist[u] + 1
           parent[v] = u
           q.push(v)
-          pushStep(v, `➕ Phát hiện giao dịch nghi vấn tới ${v}, đưa vào danh sách theo dõi mở rộng`, { u, v }, q)
+          pushStep(v, `➕ Phát hiện giao dịch nghi vấn tới ${v}`, { u, v }, q)
         }
       })
     }
@@ -63,12 +91,15 @@ const ALGORITHMS = {
     return { steps, dist, parent, visited: Array.from(visited) }
   },
 
-  dfs: function(vertices, edges, start) {
+  // ── DFS ───────────────────────────────────────────────────────────────────
+
+  dfs(vertices, edges, start) {
     const adj = this.buildAdj(vertices, edges)
     const visited = new Set()
     const parent = {}
     const steps = []
-    const stack = [] // For tracing
+    const stack = []
+    let depth = 0
 
     const pushStep = (u, msg, highlightEdge) => {
       const nodeStatus = {}
@@ -77,38 +108,38 @@ const ALGORITHMS = {
         else if (v.id === u) nodeStatus[v.id] = 'active'
         else nodeStatus[v.id] = 'unvisited'
       })
-      steps.push({ 
-        msg, 
-        nodeStatus, 
-        highlightEdge, 
-        visited: new Set(visited), 
-        parent: { ...parent },
-        stack: [...stack], // Tracking Stack for TracePanel
-        type: 'stack' 
-      })
+      steps.push({ msg, nodeStatus, highlightEdge, visited: new Set(visited), parent: { ...parent }, stack: [...stack], type: 'stack' })
     }
 
-    function dfsRec(u) {
+    const dfsRec = (u) => {
+      if (depth > MAX_TRAVERSAL_DEPTH) return
+      depth++
       visited.add(u)
       stack.push(u)
-      pushStep(u, `📥 Bắt đầu cuộc điều tra chuyên sâu vào mạng lưới của ${u}`)
+      pushStep(u, `📥 Điều tra chuyên sâu mạng lưới của ${u}`)
       ;(adj[u] || []).forEach(v => {
         if (!visited.has(v)) {
           parent[v] = u
-          pushStep(v, `→ Lần theo đầu mối giao dịch: ${u} ➔ ${v}`, { u, v })
+          pushStep(v, `→ Lần theo đầu mối: ${u} ➔ ${v}`, { u, v })
           dfsRec(v)
         }
       })
       stack.pop()
       pushStep(u, `📤 Hoàn tất phân tích các nhánh liên quan tới ${u}`)
+      depth--
     }
 
     dfsRec(start)
     return { steps, visited: Array.from(visited), parent }
   },
 
-  tarjan: function(vertices, edges) {
-    const adj = this.buildAdj(vertices, edges)
+  // ── Tarjan SCC ────────────────────────────────────────────────────────────
+  // [BUG-01 FIX]: Now uses buildDirectedAdj — SCCs require directed edges.
+  // Previously used buildAdj (undirected), making every pair of connected
+  // nodes a trivial SCC and inflating economy yields.
+
+  tarjan(vertices, edges) {
+    const adj = this.buildDirectedAdj(vertices, edges) // ← FIX: directed
     let idx = 0
     const index = {}
     const low = {}
@@ -124,28 +155,22 @@ const ALGORITHMS = {
         else if (onStack.has(v.id)) nodeStatus[v.id] = v.id === u ? 'active' : 'visited'
         else nodeStatus[v.id] = 'processed'
       })
-      steps.push({ 
-        msg, 
-        nodeStatus, 
-        stack: [...currentStack], 
-        comps: comps.map(c => [...c]),
-        type: 'stack'
-      })
+      steps.push({ msg, nodeStatus, stack: [...currentStack], comps: comps.map(c => [...c]), type: 'stack' })
     }
 
-    function strongConnect(u) {
+    const strongConnect = (u) => {
       index[u] = low[u] = idx++
       stack.push(u)
       onStack.add(u)
-      pushStep(u, `🔵 Thiết lập hồ sơ theo dõi cho ${u} và đưa vào bộ lọc SCC`, stack)
+      pushStep(u, `🔵 Thiết lập hồ sơ theo dõi cho ${u}`, stack)
       ;(adj[u] || []).forEach(v => {
         if (index[v] == null) {
           strongConnect(v)
           low[u] = Math.min(low[u], low[v])
-          pushStep(u, `🔄 Phát hiện mối liên kết vòng luân chuyển tiền tại ${u}`, stack)
+          pushStep(u, `🔄 Phát hiện liên kết vòng tại ${u}`, stack)
         } else if (onStack.has(v)) {
           low[u] = Math.min(low[u], index[v])
-          pushStep(u, `⬅️ Phát hiện giao dịch quay đầu tới ${v}: Nghi vấn chu trình rửa tiền khép kín`, stack)
+          pushStep(u, `⬅️ Phát hiện giao dịch quay đầu tới ${v}: Nghi vấn chu trình rửa tiền!`, stack)
         }
       })
       if (low[u] === index[u]) {
@@ -157,7 +182,7 @@ const ALGORITHMS = {
           comp.push(w)
         } while (w !== u)
         comps.push(comp)
-        pushStep(u, `🎯 XÁC MINH MẠNG LƯỚI PHỨC TẠP: Đã bóc tách được nhóm tài khoản liên đới khép kín.`, stack)
+        pushStep(u, `🎯 XÁC MINH MẠNG LƯỚI PHỨC TẠP: Bóc tách nhóm tài khoản khép kín.`, stack)
       }
     }
 
@@ -168,8 +193,10 @@ const ALGORITHMS = {
     return { steps, comps }
   },
 
-  findBridges: function(vertices, edges) {
-    const adj = this.buildAdj(vertices, edges, false) 
+  // ── Find Bridges ──────────────────────────────────────────────────────────
+
+  findBridges(vertices, edges) {
+    const adj = this.buildAdj(vertices, edges)
     const discoveryTime = {}
     const lowLink = {}
     const visited = new Set()
@@ -178,8 +205,8 @@ const ALGORITHMS = {
     const steps = []
 
     const pushStep = (u, v, msg, isBridge = false) => {
-      steps.push({ 
-        u, v, msg, 
+      steps.push({
+        u, v, msg,
         nodeStatus: Array.from(visited).reduce((acc, nid) => ({ ...acc, [nid]: 'visited' }), { [u]: 'active' }),
         isBridge,
         type: 'bridge'
@@ -189,7 +216,6 @@ const ALGORITHMS = {
     const dfs = (u, p = null) => {
       visited.add(u)
       discoveryTime[u] = lowLink[u] = time++
-      
       ;(adj[u] || []).forEach(v => {
         if (v === p) return
         if (visited.has(v)) {
@@ -200,7 +226,7 @@ const ALGORITHMS = {
           lowLink[u] = Math.min(lowLink[u], lowLink[v])
           if (lowLink[v] > discoveryTime[u]) {
             bridges.push({ u, v })
-            pushStep(u, v, `⚠️ PHÁT HIỆN ĐIỂM NGHẼN TRÌ TRỆ: Nếu đóng băng tài khoản ${v}, toàn bộ dòng tiền từ ${u} sẽ bị tê liệt hoàn toàn!`, true)
+            pushStep(u, v, `⚠️ PHÁT HIỆN ĐIỂM NGHẼN: Phong tỏa ${v} sẽ cô lập dòng tiền từ ${u}!`, true)
           }
         }
       })
@@ -213,8 +239,10 @@ const ALGORITHMS = {
     return { steps, bridges }
   },
 
-  strongOrientation: function(vertices, edges) {
-    const adj = this.buildAdj(vertices, edges, false) 
+  // ── Strong Orientation ────────────────────────────────────────────────────
+
+  strongOrientation(vertices, edges) {
+    const adj = this.buildAdj(vertices, edges)
     const visited = new Set()
     const orientedEdges = []
     const steps = []
@@ -223,18 +251,11 @@ const ALGORITHMS = {
       visited.add(u)
       ;(adj[u] || []).forEach(v => {
         if (v === p) return
-        
         const exists = orientedEdges.some(e => (e.u === u && e.v === v) || (e.u === v && e.v === u))
         if (!exists) {
           orientedEdges.push({ u, v })
-          steps.push({ 
-            msg: `➡️ Định chiều: ${u} → ${v}`, 
-            highlightEdge: { u, v },
-            nodeStatus: { [u]: 'active', [v]: 'visited' }
-          })
-          if (!visited.has(v)) {
-            dfs(v, u)
-          }
+          steps.push({ msg: `➡️ Định chiều: ${u} → ${v}`, highlightEdge: { u, v }, nodeStatus: { [u]: 'active', [v]: 'visited' } })
+          if (!visited.has(v)) dfs(v, u)
         }
       })
     }
@@ -246,18 +267,10 @@ const ALGORITHMS = {
     return { steps, orientedEdges }
   },
 
-  buildTransposeAdj: function(vertices, edges) {
-    const adj = {}
-    vertices.forEach(v => { adj[v.id] = [] })
-    edges.forEach(e => {
-      if (!adj[e.v]) adj[e.v] = []
-      adj[e.v].push(e.u)
-    })
-    return adj
-  },
+  // ── Kosaraju SCC ──────────────────────────────────────────────────────────
 
-  kosaraju: function(vertices, edges) {
-    const adj = this.buildDirectedAdj(vertices, edges)
+  kosaraju(vertices, edges) {
+    const adj = this.buildDirectedAdj(vertices, edges) // directed
     const visited = new Set()
     const stack = []
     const steps = []
@@ -269,58 +282,39 @@ const ALGORITHMS = {
         else if (visited.has(v.id)) nodeStatus[v.id] = 'visited'
         else nodeStatus[v.id] = 'unvisited'
       })
-      steps.push({ 
-        msg, 
-        nodeStatus, 
-        stack: [...stack], 
-        type: 'stack',
-        isTranspose: opts.isTranspose || false,
-        highlightEdge: opts.highlightEdge || null
-      })
+      steps.push({ msg, nodeStatus, stack: [...stack], type: 'stack', isTranspose: opts.isTranspose || false, highlightEdge: opts.highlightEdge || null })
     }
 
-    // Step 0: Initial
-    steps.push({ msg: "🕵️ Bắt đầu chiến dịch bóc tách mạng lưới rửa tiền đa quốc gia (Kosaraju)", nodeStatus: {}, stack: [], type: 'stack' })
+    steps.push({ msg: '🕵️ Bắt đầu bóc tách mạng lưới rửa tiền đa quốc gia (Kosaraju)', nodeStatus: {}, stack: [], type: 'stack' })
 
-    // Step 1: Fill stack with finishing times
     const dfs1 = (u) => {
       visited.add(u)
-      pushStep(u, `1️⃣ Phân tích lượt đi: Giám sát luồng tiền xuất phát từ ${u}`)
+      pushStep(u, `1️⃣ Phân tích lượt đi: Giám sát luồng tiền từ ${u}`)
       ;(adj[u] || []).forEach(v => {
         if (!visited.has(v)) {
-          pushStep(u, `➔ Theo dấu dòng tiền tới ${v}`, {}, { highlightEdge: {u, v} })
+          pushStep(u, `➔ Theo dấu dòng tiền tới ${v}`, {}, { highlightEdge: { u, v } })
           dfs1(v)
         }
       })
       stack.push(u)
-      pushStep(u, `✅ Hoàn tất đăng ký hồ sơ giao dịch cho ${u}`)
+      pushStep(u, `✅ Hoàn tất đăng ký hồ sơ cho ${u}`)
     }
 
-    vertices.forEach(v => {
-      if (!visited.has(v.id)) dfs1(v.id)
-    })
+    vertices.forEach(v => { if (!visited.has(v.id)) dfs1(v.id) })
 
-    // Step 2: Reverse graph
     const transpose = this.buildTransposeAdj(vertices, edges)
-    steps.push({ 
-      msg: "🔄 Giai đoạn 2: Tạo đồ thị chuyển vị (Đảo ngược tất cả các cạnh)", 
-      nodeStatus: {}, 
-      stack: [...stack], 
-      type: 'stack',
-      isTranspose: true 
-    })
-    
+    steps.push({ msg: '🔄 Giai đoạn 2: Tạo đồ thị chuyển vị', nodeStatus: {}, stack: [...stack], type: 'stack', isTranspose: true })
+
     visited.clear()
     const comps = []
 
-    // Step 3: Process stack in reversed order
     const dfs2 = (u, currentComp) => {
       visited.add(u)
       currentComp.push(u)
-      pushStep(u, `2️⃣ DFS lượt về: Đang xét ${u} trong đồ thị chuyển vị`, {}, { isTranspose: true })
+      pushStep(u, `2️⃣ DFS lượt về: Xét ${u} trong đồ thị chuyển vị`, {}, { isTranspose: true })
       ;(transpose[u] || []).forEach(v => {
         if (!visited.has(v)) {
-          pushStep(u, `→ Duyệt ngược cạnh (${v}, ${u})`, {}, { isTranspose: true, highlightEdge: {u, v} })
+          pushStep(u, `→ Duyệt ngược (${v}, ${u})`, {}, { isTranspose: true, highlightEdge: { u, v } })
           dfs2(v, currentComp)
         }
       })
@@ -330,25 +324,34 @@ const ALGORITHMS = {
       const u = stack.pop()
       if (u !== undefined && !visited.has(u)) {
         const comp = []
-        pushStep(u, `📢 Truy vết ngược: Bắt đầu từ tài khoản đầu nòng ${u} trong đồ thị chuyển vị`, {}, { isTranspose: true })
+        pushStep(u, `📢 Truy vết ngược: Bắt đầu từ ${u}`, {}, { isTranspose: true })
         dfs2(u, comp)
         comps.push(comp)
-        pushStep(u, `🎯 PHÁT HIỆN MẠNG LƯỚI KHÉP KÍN: Một nhóm rửa tiền chuyên nghiệp đã bị lộ diện!`, {}, { isTranspose: true })
+        pushStep(u, `🎯 PHÁT HIỆN MẠNG LƯỚI KHÉP KÍN!`, {}, { isTranspose: true })
       } else if (u !== undefined) {
-        pushStep(u, `⏭️ Bỏ qua ${u} (Đã xác định thuộc mạng lưới khác)`, {}, { isTranspose: true })
+        pushStep(u, `⏭️ Bỏ qua ${u} (đã xác định)`, {}, { isTranspose: true })
       }
     }
 
     return { steps, comps }
   },
 
-  // Find cycles (rings) in undirected graph via DFS back-edge detection
-  // Returns { cycleNodes: Set<id>, cycleEdges: [{u,v}], steps: [] }
-  findCycles: function(vertices, edges) {
-    const adj = {} // undirected adjacency with parent tracking
+  // ── Find Cycles (undirected) ──────────────────────────────────────────────
+  // [BUG-04 FIX]: Deduplicate edges before building adjacency to prevent
+  // parallel/multi-edges from generating false back-edge detections.
 
-    vertices.forEach(v => { adj[v.id] = [] })
+  findCycles(vertices, edges) {
+    // Deduplicate edges: keep only one (u,v) or (v,u) per pair
+    const seen = new Set()
+    const uniqueEdges = []
     edges.forEach(e => {
+      const key = e.u < e.v ? `${e.u}||${e.v}` : `${e.v}||${e.u}`
+      if (!seen.has(key)) { seen.add(key); uniqueEdges.push(e) }
+    })
+
+    const adj = {}
+    vertices.forEach(v => { adj[v.id] = [] })
+    uniqueEdges.forEach(e => {
       if (!adj[e.u]) adj[e.u] = []
       if (!adj[e.v]) adj[e.v] = []
       adj[e.u].push(e.v)
@@ -373,29 +376,25 @@ const ALGORITHMS = {
 
     const dfs = (u, par) => {
       visited.add(u)
-      pushStep(u, `🔴 Duyệt nút ${u} — tìm kiếm vòng lặp rửa tiền`)
+      pushStep(u, `🔴 Duyệt nút ${u} — tìm vòng lặp rửa tiền`)
       for (const v of (adj[u] || [])) {
         if (v === par) continue
         if (visited.has(v)) {
-          // Back edge found — trace the cycle
-          pushStep(u, `⚡ PHÁT HIỆN VÒNG: ${u} → ${v} là cạnh ngược — chu trình khép kín!`)
-          // Mark the cycle nodes/edges by tracing parent chain from u back to v
+          pushStep(u, `⚡ PHÁT HIỆN VÒNG: ${u} → ${v} là cạnh ngược!`)
           cycleNodes.add(u)
           cycleNodes.add(v)
-          // Add the back edge
-          const backEdgeExists = cycleEdges.some(ce => 
-            (ce.u === u && ce.v === v) || (ce.u === v && ce.v === u)
-          )
-          if (!backEdgeExists) cycleEdges.push({ u, v })
-          // Trace path from u back to v via parents
+          const backEdgeKey = `${u}||${v}`
+          if (!cycleEdges.some(ce => `${ce.u}||${ce.v}` === backEdgeKey || `${ce.v}||${ce.u}` === backEdgeKey)) {
+            cycleEdges.push({ u, v })
+          }
           let cur = u
           while (cur !== v && parent[cur] != null) {
             const p = parent[cur]
             cycleNodes.add(p)
-            const pathEdgeExists = cycleEdges.some(ce => 
-              (ce.u === cur && ce.v === p) || (ce.u === p && ce.v === cur)
-            )
-            if (!pathEdgeExists) cycleEdges.push({ u: p, v: cur })
+            const pathKey = `${cur}||${p}`
+            if (!cycleEdges.some(ce => `${ce.u}||${ce.v}` === pathKey || `${ce.v}||${ce.u}` === pathKey)) {
+              cycleEdges.push({ u: p, v: cur })
+            }
             cur = p
           }
         } else {
@@ -409,18 +408,12 @@ const ALGORITHMS = {
       if (!visited.has(v.id)) dfs(v.id, null)
     })
 
-    // Final summary step
     if (cycleNodes.size > 0) {
-      pushStep(null, `🎯 HOÀN TẤT: Phát hiện ${cycleEdges.length} cạnh khép vòng trong mạng lưới!`)
+      pushStep(null, `🎯 HOÀN TẤT: Phát hiện ${cycleEdges.length} cạnh khép vòng!`)
     }
 
-    return {
-      steps,
-      cycleNodes: Array.from(cycleNodes),
-      cycleEdges
-    }
+    return { steps, cycleNodes: Array.from(cycleNodes), cycleEdges }
   }
-
 }
 
 export default ALGORITHMS

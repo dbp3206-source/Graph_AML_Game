@@ -341,7 +341,9 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
     invFreezeMax,
     animationSpeed,
     setAnimationSpeed,
-    suspicionHistory
+    suspicionHistory,
+    incomeHistory,   // [LOGIC-05 FIX]: use hook selector, not getState()
+    expenseHistory   // [LOGIC-05 FIX]: use hook selector, not getState()
   } = useGameState()
 
   const disabled = gameStatus !== 'playing' || isAnimating || showSitrep || invFreezeSelectionMode
@@ -501,8 +503,8 @@ const InvestigatorPanel = ({ onSkillFocus }) => {
           <div className="h-28 bg-black/20 rounded-lg border border-white/5 p-4 pt-8">
             <SuspicionChart 
               datasets={[
-                { data: useGameState.getState().incomeHistory || [0], color: '#39ff14', label: 'Thu' },
-                { data: useGameState.getState().expenseHistory || [0], color: '#ef4444', label: 'Chi' }
+                { data: incomeHistory || [0], color: '#39ff14', label: 'Thu' },
+                { data: expenseHistory || [0], color: '#ef4444', label: 'Chi' }
               ]}
               height={80}
             />

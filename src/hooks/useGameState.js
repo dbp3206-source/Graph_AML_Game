@@ -3,27 +3,31 @@ import { persist } from 'zustand/middleware'
 import { getScenario } from '../utils/scenarios'
 import ALGORITHMS from '../utils/algorithms'
 import { generateRandomNetwork } from '../utils/graphGenerator'
- 
-const EMOJI_MAPS = {
-  source: '💰',
-  personal: '👦',
-  shell: '👻',
-  mixer: '🎭',
-  bank: '🏦',
-  target: '🏦'
-}
+import {
+  EMOJI_MAPS,
+  NODE_TYPE_LABELS,
+  MAX_TURNS,
+  INV_WIN_THRESHOLD,
+  SYN_WIN_AMOUNT,
+  GRACE_PERIOD_TURNS,
+  NODE_CONSTRUCTION_COST,
+  LOOP_CREATION_COST,
+  STARTING_AP,
+} from '../utils/constants'
+
 const useGameState = create(
   persist(
     (set, get) => ({
       faction: 'syndicate',
       turn: 1,
-      ap: 6,
-      maxAp: 6,
+      ap: STARTING_AP,
+      maxAp: STARTING_AP,
       budget: 100,
       maxBudget: 100,
       suspicion: 0,
       moneyLaundered: 0,
-      targetMoney: 150000, // Mục tiêu mặc định mới
+      targetMoney: SYN_WIN_AMOUNT,
+      maxTurns: MAX_TURNS, // Turn limit: Investigator wins if exceeded
       scenario: 'chain',
       graphData: null,
       showTutorial: false,
@@ -168,8 +172,10 @@ const useGameState = create(
       setBudget: (budget) => set({ budget }),
       setSuspicion: (suspicion) => set({ suspicion }),
       setMoneyLaundered: (moneyLaundered) => set({ moneyLaundered }),
-      set: (vals) => set(vals),
+      // NOTE: Public set() removed (ARCH-02) — use named actions
       setScenario: (scenario) => set({ scenario }),
+      setAutoPlayStep: (step) => set({ autoPlayStep: step }),
+      setIsAutoPlaying: (isAutoPlaying) => set({ isAutoPlaying }),
       setGraphData: (graphData) => set({ graphData }),
       setShowTutorial: (showTutorial) => set({ showTutorial }),
       setGameStatus: (gameStatus) => set({ gameStatus }),
@@ -461,9 +467,17 @@ const useGameState = create(
           console.warn(`Attempted to add edge with non-existent nodes: ${u} -> ${v}`)
           return state
         }
-        // FROZEN NODE BLOCK: Cannot create edges involving frozen nodes
+        // FROZEN NODE BLOCK
         if (nodeU.isFrozen || nodeV.isFrozen) {
           console.warn(`Blocked edge creation: node ${nodeU.isFrozen ? u : v} is frozen.`)
+          return state
+        }
+        // [LOGIC-02 FIX]: Bidirectional duplicate check — prevent parallel edges
+        const alreadyExists = state.graphData.edges.some(
+          e => (e.u === u && e.v === v) || (e.u === v && e.v === u)
+        )
+        if (alreadyExists) {
+          console.warn(`Blocked duplicate edge: ${u} <-> ${v} already exists.`)
           return state
         }
         return {
@@ -579,21 +593,36 @@ const useGameState = create(
         } else {
           // Quay lại lượt Syndicate - Tính toán kinh tế
           const economyResults = get().processEconomy()
-          
+          const maxTurns = get().maxTurns
+
           let nextBudget = budget + economyResults.netIncome
           const newMoneyLaundered = (get().moneyLaundered || 0) + economyResults.launderedThisRound
           const launderedPercent = (newMoneyLaundered / targetMoney) * 100
+          const nextTurn = turn + 1
+
+          // --- [Step 4 FIX]: Turn Limit — Investigator wins by timeout ---
+          if (nextTurn > maxTurns) {
+            set({ gameStatus: 'investigator_win' })
+            addNews({
+              type: 'alert',
+              title: '⏳ HẾT THỜI HẠN',
+              summary: 'Syndicate hết thời gian',
+              message: `Vượt quá ${maxTurns} lượt => Investigator thắng theo thời gian.`
+            })
+            return
+          }
           
           // --- Bankruptcy Logic ---
+          // [LOGIC-03 FIX]: Use GRACE_PERIOD_TURNS constant
           if (nextBudget < 0) {
-            if (turn <= 5) {
+            if (turn <= GRACE_PERIOD_TURNS) {
               // Grace period: Force budget to 0
               nextBudget = 0
               addNews({ 
                 type: 'alert', 
                 title: '⚠️ Khủng hoảng', 
                 summary: 'Gói cứu trợ lượt ân hạn',
-                message: 'Ngân sách < 0 => Trợ cấp tổ chức mẹ => $0.' 
+                message: `Ngân sách < 0 => Trợ cấp tổ chức mẹ => $0. (Lượt ân hạn còn ${GRACE_PERIOD_TURNS - turn})` 
               })
             } else {
               // Post-grace bankruptcy check
@@ -621,7 +650,7 @@ const useGameState = create(
           
           set({
             faction: 'syndicate',
-            turn: turn + 1,
+            turn: nextTurn,
             budget: nextBudget,
             moneyLaundered: newMoneyLaundered,
             ap: maxAp,
@@ -669,7 +698,7 @@ const useGameState = create(
               type: 'alert',
               title: '🏆 MISSION ACCOMPLISHED',
               summary: 'Mục tiêu hoàn tất tuyệt đối',
-              message: 'Syndicate => Rửa tiền > $150,000 => CHIẾN THẮNG.'
+              message: `Syndicate => Rửa tiền > $${targetMoney.toLocaleString()} => CHIẾN THẮNG.`
             })
           }
           addNews({
@@ -750,20 +779,18 @@ const useGameState = create(
         
         const volumeIncrements = []
 
-        // Loops: $4000 each SCC (Giảm từ 5000)
+        // Loops: $5500 each SCC
         sccResult.comps.forEach(comp => {
           if (comp.length > 1) {
             const isSafe = comp.every(id => safeNodeIds.has(id))
             if (isSafe) {
               const yieldAmount = 5500
               launderedThisRound += yieldAmount
-              // Calculate volume increments for edges in this SCC
-              comp.forEach(uId => {
-                edges.forEach(e => {
-                  if (comp.includes(e.u) && comp.includes(e.v)) {
-                    volumeIncrements.push({ u: e.u, v: e.v, addVolume: yieldAmount / 2 })
-                  }
-                })
+              // [BUG-02 FIX]: Iterate over EDGES once, not nodes x edges (was O(N^2))
+              edges.forEach(e => {
+                if (comp.includes(e.u) && comp.includes(e.v)) {
+                  volumeIncrements.push({ u: e.u, v: e.v, addVolume: yieldAmount / 2 })
+                }
               })
             }
           }
@@ -786,15 +813,14 @@ const useGameState = create(
       },
 
       investigatorScan: (nodesFound, cost) => {
-        const { budget, suspicion, addNews, gameStatus, isAnimating } = get()
+        // [BUG-05 FIX]: Win condition removed from here.
+        // Win is ONLY via suspicionProgress in invExecute() / invFreezeSelectNode().
+        const { suspicion, addNews, gameStatus } = get()
         if (gameStatus !== 'playing') return
 
-        const suspicionGain = 1.5 
+        const suspicionGain = 1.5
         const newSuspicion = Math.min(100, suspicion + nodesFound * suspicionGain)
 
-        // Đánh dấu các node trong algorithmSteps là bị lộ (nếu có)
-        // Lưu ý: investigatorScan thường được gọi kèm với algorithmResult
-        // Chúng ta sẽ đánh dấu visited nodes là Revealed
         const { algorithmSteps, currentStepIndex } = get()
         const currentStep = algorithmSteps[currentStepIndex]
         if (currentStep && currentStep.nodeStatus) {
@@ -802,7 +828,7 @@ const useGameState = create(
            set(state => ({
              graphData: {
                ...state.graphData,
-               vertices: state.graphData.vertices.map(v => 
+               vertices: state.graphData.vertices.map(v =>
                  newlyRevealed.includes(v.id) ? { ...v, isRevealed: true } : v
                )
              }
@@ -816,29 +842,7 @@ const useGameState = create(
           summary: `Xác minh ${nodesFound} điểm khả nghi`,
           message: `Truy vết => {${nodesFound}} đối tượng => Rủi ro: {+${nodesFound * suspicionGain}%}`
         })
-        
-        if (newSuspicion >= 80) {
-          const { currentLevelIndex, maxLevelUnlocked } = get()
-          const outcome = { 
-            status: 'investigator_win',
-            maxUnlocked: Math.max(maxLevelUnlocked, currentLevelIndex + 2) 
-          }
-          
-          if (isAnimating) {
-            set({ pendingOutcome: outcome })
-          } else {
-            set({ 
-              gameStatus: 'investigator_win',
-              maxLevelUnlocked: outcome.maxUnlocked 
-            })
-            addNews({
-              type: 'alert',
-              title: '🏆 CHIẾN THẮNG!',
-              summary: 'Mạng lưới đã bị phá vỡ',
-              message: 'Investigator => Thu thập đủ chứng cứ => CHIẾN THẮNG.'
-            })
-          }
-        }
+        // NOTE: no win check here — win only via suspicionProgress
       },
 
       startGame: (levelId) => {
@@ -848,23 +852,16 @@ const useGameState = create(
         
         // Ensure static nodes have display names
         sc.vertices = sc.vertices.map(v => {
-          const typeLabels = {
-            shell: 'Công ty ma',
-            personal: 'TK Cá nhân',
-            bank: 'Ngân hàng',
-            source: 'Nguồn tiền',
-            mixer: 'Sàn chui'
-          }
           return {
             ...v,
-            displayName: v.label || typeLabels[v.type] || v.id,
+            displayName: v.label || NODE_TYPE_LABELS[v.type] || v.id,
             emoji: v.emoji || (v.type === 'personal' ? (Math.random() > 0.5 ? '👦' : '👧') : EMOJI_MAPS[v.type] || '⚪'),
             isRevealed: false,
             isFrozen: false,
             isInactive: false,
             skillHistory: [],
             lockedTurnCount: 0,
-            risk: Math.floor(Math.random() * 40) + 10 // Initial risk
+            risk: Math.floor(Math.random() * 40) + 10
           }
         })
 
@@ -879,15 +876,16 @@ const useGameState = create(
           gameStatus: 'playing',
           pendingOutcome: null,
           turn: 1,
-          ap: 6,
-          maxAp: 6,
+          ap: STARTING_AP,
+          maxAp: STARTING_AP,
           suspicion: 5,
           suspicionHistory: [5],
           moneyLaundered: 0,
           launderedHistory: [0],
           incomeHistory: [0],
           expenseHistory: [0],
-          targetMoney: 150000, // Đặt mục tiêu thắng là 150k
+          targetMoney: SYN_WIN_AMOUNT,
+          maxTurns: sc.maxTurns || MAX_TURNS, // Load turn limit from scenario
           algorithmSteps: [],
           currentStepIndex: 0,
           isOriented: false,
@@ -971,7 +969,7 @@ const useGameState = create(
         deathDefiancePendingAp: 0,
         // Reset Investigator state
         investigationBudget: 100,
-        investigatorAp: 6,
+        investigatorAp: STARTING_AP,
         hasUsedRedNotice: false,
         redNoticeFogCleared: false,
         showSitrep: false,
@@ -985,14 +983,14 @@ const useGameState = create(
         invFreezeRemaining: 0,
         invFreezeMax: 0,
         invFreezePendingCost: 0,
-        invFreezePendingAp: 0,
-        invFreezePendingAp: 0,
+        invFreezePendingAp: 0, // [BUG-03 FIX]: removed duplicate key
         showFreezeCountModal: false,
         suspicionHistory: [5],
         launderedHistory: [0],
         incomeHistory: [0],
         expenseHistory: [0],
-        targetMoney: 150000
+        targetMoney: SYN_WIN_AMOUNT,
+        maxTurns: MAX_TURNS
       }),
 
 
@@ -1294,6 +1292,25 @@ const useGameState = create(
           title: '🔄 Chế độ tạo vòng', 
           summary: 'Bắt đầu thiết lập chu trình',
           message: `Khởi tạo => {${count}} đỉnh => Chờ xác nhận.` 
+        })
+      },
+
+      // [LOGIC-04 FIX]: Added AP refund when loop picking is cancelled
+      cancelLoopPicking: () => {
+        const { ap, loopSkillData, addNews } = get()
+        const apCost = loopSkillData?.cost || 2
+        set({
+          loopPickingMode: false,
+          loopSelectedNodes: [],
+          loopTargetCount: 0,
+          showLoopModal: false,
+          ap: ap + apCost, // Refund AP
+        })
+        addNews({
+          type: 'system',
+          title: '❌ Hủy tạo vòng',
+          summary: 'Đã hoàn trả AP',
+          message: `Hủy thiết lập chu trình => Hoàn trả {${apCost}} AP.`
         })
       },
 
@@ -1820,23 +1837,54 @@ const useGameState = create(
 
       // Red Notice Free Skill: Run scan + execute for free
       invRedNoticeFreeSkill: (skillId, algoOverride) => {
-        const { addNews } = get()
-        // Temporarily override costs by giving budget/AP to cover, then execute
+        const { addNews, invScan, invExecute, investigationBudget, investigatorAp } = get()
+        // [LOGIC-01 FIX]: Instead of inflating budget (which is not reverted on failure),
+        // we snapshot current budget/AP, invoke scan+execute, then RESTORE to snapshot
+        // minus the net game-meaningful cost (which for RedNotice is 0 — it's free).
+        const budgetBefore = investigationBudget
+        const apBefore = investigatorAp
+
+        // Provide enough resources for the scan
         const scanCosts = { bridge: 15, deorient: 10, network: algoOverride === 'kosaraju' ? 25 : 40 }
-        const execCosts = { bridge: 10, deorient: 10, network: 20 }
-        const apCosts = { bridge: 1, deorient: 1, network: 2 }
-        // Add enough budget/AP temporarily to cover costs, execute, then deduct difference
-        set(state => ({
-          investigationBudget: state.investigationBudget + scanCosts[skillId] + execCosts[skillId],
-          investigatorAp: state.investigatorAp + apCosts[skillId]
-        }))
-        get().invScan(skillId, algoOverride)
-        // Check scan found targets, then execute
+        const execCosts = { bridge: 10, deorient: 10, network: 0 } // network uses freeze flow, no budget cost here
+        const apCosts = { bridge: 1, deorient: 1, network: 0 }
+
+        set({
+          investigationBudget: budgetBefore + (scanCosts[skillId] || 0) + (execCosts[skillId] || 0),
+          investigatorAp: apBefore + (apCosts[skillId] || 0)
+        })
+
+        invScan(skillId, algoOverride)
+
         const afterScan = get().invScanResult[skillId]
-        if (afterScan?.targets && (Array.isArray(afterScan.targets) ? afterScan.targets.length > 0 : afterScan.targets.hubs?.length > 0)) {
-          get().invExecute(skillId)
+        const hasTargets = afterScan?.targets &&
+          (Array.isArray(afterScan.targets)
+            ? afterScan.targets.length > 0
+            : (afterScan.targets.hubs?.length > 0 || afterScan.targets.cycleNodes?.length > 0))
+
+        if (hasTargets) {
+          invExecute(skillId)
         }
-        addNews({ type: 'alert', title: '🚨 RED NOTICE', message: `Kỹ năng ${skillId.toUpperCase()} đã được thực thi MIỄN PHÍ!` })
+
+        // Restore budget/AP to pre-skill values (net cost = $0 for Red Notice)
+        // but cap at actual current values in case deductions happened during execute
+        const currentBudget = get().investigationBudget
+        const currentAp = get().investigatorAp
+        // Only restore if the values are still inflated (i.e. execute didn't consume them)
+        const budgetOvershoot = Math.max(0, currentBudget - budgetBefore)
+        const apOvershoot = Math.max(0, currentAp - apBefore)
+        if (budgetOvershoot > 0 || apOvershoot > 0) {
+          set({
+            investigationBudget: currentBudget - budgetOvershoot,
+            investigatorAp: currentAp - apOvershoot
+          })
+        }
+
+        addNews({
+          type: 'alert',
+          title: '🚨 RED NOTICE',
+          message: `Kỹ năng ${skillId.toUpperCase()} đã được thực thi MIỄN PHÍ!`
+        })
       }
     }),
     {

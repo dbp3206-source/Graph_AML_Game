@@ -2,18 +2,10 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import cytoscape from 'cytoscape'
 import useGameState from '../hooks/useGameState'
 import ALGORITHMS from '../utils/algorithms'
+import { EMOJI_MAPS } from '../utils/constants'
 import { Layers, Target, Zap, Eye, MousePointer2, Plus, GitCommit, Trash2, Wand2, Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Shuffle, Wind, Home, ArrowLeft } from 'lucide-react'
 import DeepMoneyRain from './DeepMoneyRain'
 import CustomerDossier from './CustomerDossier'
-
-const EMOJI_MAPS = {
-  source: '💰',
-  personal: '👦',
-  shell: '👻',
-  mixer: '🎭',
-  bank: '🏦',
-  target: '🏦'
-}
 
 // Floating bounty text component
 function FloatingBountyText({ x, y, text, color, onDone }) {
@@ -673,9 +665,17 @@ function RadarCanvas() {
       }
     })
 
-    // Update Edges
-    cy.edges().remove()
-    graphData.edges.forEach((e, i) => {
+    // [BUG-06 FIX]: Edge Diffing to prevent full rebuild
+    const currentEdgeIds = new Set(cy.edges().map(e => e.id()))
+    const nextEdgeIds = new Set(graphData.edges.map(e => `edge-${e.u}-${e.v}`))
+
+    // Remove old edges
+    currentEdgeIds.forEach(id => {
+      if (!nextEdgeIds.has(id)) cy.remove(`#${id}`)
+    })
+
+    graphData.edges.forEach((e) => {
+      const edgeId = `edge-${e.u}-${e.v}`
       const sourceNode = cy.getElementById(e.u)
       const targetNode = cy.getElementById(e.v)
       if (sourceNode.length > 0 && targetNode.length > 0) {
@@ -721,22 +721,34 @@ function RadarCanvas() {
         const volumeWidth = 6 + Math.min(20, volume / 500)
         if (volume > 2000) classes += ' high-volume'
 
-        cy.add({
-          group: 'edges',
-          data: {
-            id: `edge${i}`,
-            source: e.u,
-            target: e.v,
-            customColor: isSyndicate
-              ? (customStyle?.color || '#ff4d4d')
-              : (e.isHighlighted ? (e.highlightSkill === 'network' ? '#a855f7' : '#ef4444') : '#39ff14')
-          },
-          style: {
+        const edgeColor = isSyndicate
+          ? (customStyle?.color || '#ff4d4d')
+          : (e.isHighlighted ? (e.highlightSkill === 'network' ? '#a855f7' : '#ef4444') : '#39ff14')
+
+        const existingEdge = cy.getElementById(edgeId)
+        if (existingEdge.length === 0) {
+          cy.add({
+            group: 'edges',
+            data: {
+              id: edgeId,
+              source: e.u,
+              target: e.v,
+              customColor: edgeColor
+            },
+            style: {
+              'width': volumeWidth,
+              'shadow-blur': 15 + Math.min(20, volume / 400)
+            },
+            classes: classes
+          })
+        } else {
+          existingEdge.classes(classes)
+          existingEdge.data('customColor', edgeColor)
+          existingEdge.style({
             'width': volumeWidth,
             'shadow-blur': 15 + Math.min(20, volume / 400)
-          },
-          classes: classes
-        })
+          })
+        }
       }
     })
 

@@ -30,41 +30,25 @@ function useAutoPlay() {
   const stepRef = useRef(0)
   const intervalRef = useRef(null)
 
-  const runAlgorithm = (algorithmId, targetNodeId) => {
-    if (!graphData) return null
-    const startNode = targetNodeId || selectedNode || graphData.source
-    if (algorithmId === 'bfs') return ALGORITHMS.bfs(graphData.vertices, graphData.edges, startNode)
-    if (algorithmId === 'dfs') return ALGORITHMS.dfs(graphData.vertices, graphData.edges, startNode)
-    if (algorithmId === 'tarjan') return ALGORITHMS.tarjan(graphData.vertices, graphData.edges)
-    if (algorithmId === 'kosaraju') return ALGORITHMS.kosaraju(graphData.vertices, graphData.edges)
-    if (algorithmId === 'bridge') return ALGORITHMS.findBridges(graphData.vertices, graphData.edges)
-    return null
-  }
-
-  const animateSteps = useCallback((steps, delay = 800) => {
-    if (!steps || steps.length === 0) return
-    
-    setIsAnimating(true)
-    let index = 0
-    
-    const interval = setInterval(() => {
-      if (index >= steps.length) {
-        clearInterval(interval)
-        setIsAnimating(false)
-        setCurrentStep(0)
-        return
-      }
-      setCurrentStep(index)
-      index++
-    }, delay)
-    
-    return interval
-  }, [])
-
   const executeStep = useCallback(() => {
     const state = useGameState.getState()
     const step = state.autoPlayStep
     const mode = state.autoPlayMode
+    const addNews = state.addNews
+    const setIsAutoPlaying = state.setIsAutoPlaying
+    const executeSkill = state.executeSkill
+    const addNodeWithEdge = state.addNodeWithEdge
+    const addEdge = state.addEdge
+    const runAlgorithm = (algorithmId, targetNodeId) => {
+      if (!state.graphData) return null
+      const startNode = targetNodeId || state.selectedNode || state.graphData.source
+      if (algorithmId === 'bfs') return ALGORITHMS.bfs(state.graphData.vertices, state.graphData.edges, startNode)
+      if (algorithmId === 'dfs') return ALGORITHMS.dfs(state.graphData.vertices, state.graphData.edges, startNode)
+      if (algorithmId === 'tarjan') return ALGORITHMS.tarjan(state.graphData.vertices, state.graphData.edges)
+      if (algorithmId === 'kosaraju') return ALGORITHMS.kosaraju(state.graphData.vertices, state.graphData.edges)
+      if (algorithmId === 'bridge') return ALGORITHMS.findBridges(state.graphData.vertices, state.graphData.edges)
+      return null
+    }
     
     if (state.gameStatus !== 'playing') {
       setIsAutoPlaying(false)
@@ -80,7 +64,7 @@ function useAutoPlay() {
         setTimeout(() => {
           const newNodeId = `auto_shell_${Date.now()}`
           addNodeWithEdge({ id: newNodeId, x: 300, y: 150, label: 'Công ty ma A', type: 'shell' }, useGameState.getState().graphData.source)
-          addNews({ type: 'syndicate', title: '🏗️ Tạo lớp', message: 'Đã chọn: Layering. Thêm node công ty ma để kéo dài đường đi.' })
+          useGameState.getState().addNews({ type: 'syndicate', title: '🏗️ Tạo lớp', message: 'Đã chọn: Layering. Thêm node công ty ma để kéo dài đường đi.' })
         }, 1000)
       } else if (step === 2) {
         addNews({ type: 'system', title: '📜 Mô phỏng', message: 'Đang cuộn xuống để chọn thêm Công ty ma...' })
@@ -88,18 +72,18 @@ function useAutoPlay() {
           const currentState = useGameState.getState()
           const newNodeId = `auto_shell_${Date.now() + 1}`
           const lastNodeId = currentState.graphData.vertices[currentState.graphData.vertices.length - 1].id
-          addNodeWithEdge({ id: newNodeId, x: 450, y: 150, label: 'Công ty ma B', type: 'shell' }, lastNodeId)
+          currentState.addNodeWithEdge({ id: newNodeId, x: 450, y: 150, label: 'Công ty ma B', type: 'shell' }, lastNodeId)
           
           setTimeout(() => {
-            addEdge(newNodeId, useGameState.getState().graphData.target)
-            addNews({ type: 'syndicate', title: '🏗️ Tạo lớp', message: 'Kết nối node cuối cùng vào Ngân hàng.' })
+            useGameState.getState().addEdge(newNodeId, useGameState.getState().graphData.target)
+            useGameState.getState().addNews({ type: 'syndicate', title: '🏗️ Tạo lớp', message: 'Kết nối node cuối cùng vào Ngân hàng.' })
           }, 500)
         }, 1000)
       } else if (step === 3) {
         addNews({ type: 'system', title: '📜 Mô phỏng', message: 'Cuộn xuống cuối danh sách: Kích hoạt Định chiều dòng tiền...' })
         setTimeout(() => {
           const skill = { id: 'orient', name: 'Định chiều', cost: 2 }
-          executeSkill(skill)
+          useGameState.getState().executeSkill(skill)
         }, 1000)
       } else {
         addNews({ type: 'system', title: '🔄 Auto', message: 'Cho phép Syndicate rửa tiền hoàn tất...' })
@@ -112,13 +96,13 @@ function useAutoPlay() {
         addNews({ type: 'investigator', title: '🤖 Auto', message: 'Investigator bắt đầu truy vết...' })
       } else if (step === 1) {
         const result = runAlgorithm('bridge', state.graphData.source)
-        setAlgorithmSteps(result.steps)
-        setIsAnimating(true)
+        state.setAlgorithmSteps(result.steps)
+        state.setIsAnimating(true)
         addNews({ type: 'investigator', title: '🔍 Dò cầu', message: 'Sử dụng DFS Low-link để tìm điểm yếu mạng lưới.' })
       } else if (step === 2) {
         const result = runAlgorithm('tarjan', state.graphData.source)
-        setAlgorithmSteps(result.steps)
-        setIsAnimating(true)
+        state.setAlgorithmSteps(result.steps)
+        state.setIsAnimating(true)
         addNews({ type: 'investigator', title: '🔍 SCC Scan', message: 'Sử dụng Kosaraju để phát hiện vòng xoay tiền.' })
       } else {
         setIsAutoPlaying(false)
@@ -126,7 +110,7 @@ function useAutoPlay() {
     }
     
     useGameState.getState().setAutoPlayStep(step + 1)
-  }, [selectedNode, addNode, addEdge, executeSkill])
+  }, []) // Empty dependency array, always use latest state via getState()
 
   useEffect(() => {
     if (!isAutoPlaying) {
