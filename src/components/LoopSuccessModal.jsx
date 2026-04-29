@@ -3,7 +3,7 @@ import { CheckCircle2, ShieldCheck, Activity, X } from 'lucide-react';
 import useGameState from '../hooks/useGameState';
 
 const LoopSuccessModal = () => {
-  const { showLoopSuccessModal, set } = useGameState();
+  const { showLoopSuccessModal, setShowLoopSuccessModal } = useGameState();
 
   if (!showLoopSuccessModal) return null;
 
@@ -47,7 +47,7 @@ const LoopSuccessModal = () => {
           </div>
 
           <button 
-            onClick={() => set({ showLoopSuccessModal: false })}
+            onClick={() => setShowLoopSuccessModal(false)}
             className="group relative w-full overflow-hidden border border-syn-pink bg-transparent px-6 py-3 transition-all hover:bg-syn-pink"
           >
             <div className="relative flex items-center justify-center space-x-2 text-syn-pink group-hover:text-syn-dark font-black tracking-widest uppercase text-sm">

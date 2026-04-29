@@ -3,7 +3,7 @@ import useGameState from '../hooks/useGameState';
 import { X, RefreshCcw } from 'lucide-react';
 
 const LoopModal = () => {
-    const { showLoopModal, set, startLoopPicking, loopSkillData, executeSkill } = useGameState();
+    const { showLoopModal, setShowLoopModal, startLoopPicking, loopSkillData, executeSkill } = useGameState();
     const [count, setCount] = useState(3);
 
     if (!showLoopModal) return null;
@@ -29,7 +29,7 @@ const LoopModal = () => {
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="relative w-96 p-8 rounded-3xl bg-syn-dark border-2 border-syn-pink/50 shadow-[0_0_50px_rgba(255,0,255,0.2)] flex flex-col items-center gap-6 animate-in zoom-in-95 duration-300">
                 <button 
-                    onClick={() => set({ showLoopModal: false })}
+                    onClick={() => setShowLoopModal(false)}
                     className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors"
                 >
                     <X className="w-6 h-6" />

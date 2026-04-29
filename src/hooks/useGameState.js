@@ -183,6 +183,8 @@ const useGameState = create(
       setIsAnimating: (isAnimating) => set({ isAnimating }),
       setDropTarget: (dropTarget) => set({ dropTarget }),
       setDraggedItem: (draggedItem) => set({ draggedItem }),
+      setShowLoopModal: (showLoopModal) => set({ showLoopModal }),
+      setShowLoopSuccessModal: (showLoopSuccessModal) => set({ showLoopSuccessModal }),
       setSelectedNode: (selectedNode) => {
         const { 
           loopPickingMode, 
